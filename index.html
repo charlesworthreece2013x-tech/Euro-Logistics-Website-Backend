@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Euro Logistics | Truckline MP VTC</title>
   
-  <!-- Custom Browser Tab Icon (Favicon) -->
-  <link rel="icon" type="image/png" href="https://i.postimg.cc/wvsT4FG8/Gemini-Generated-Image-htmcy0htmcy0htmc-Photoroom.png">
+  <!-- Mobile & Safari Apple Touch Icon -->
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/wvsT4FG8/Gemini-Generated-Image-htmcy0htmcy0htmc-Photoroom.png">
+  
+  <!-- Browser Favicons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="https://i.postimg.cc/wvsT4FG8/Gemini-Generated-Image-htmcy0htmcy0htmc-Photoroom.png">
+  <link rel="shortcut icon" href="https://i.postimg.cc/wvsT4FG8/Gemini-Generated-Image-htmcy0htmcy0htmc-Photoroom.png">
 
   <!-- Fira Sans Google Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +33,6 @@
       <li><a href="#rules">Rules</a></li>
       <li><a href="#team">Leadership</a></li>
       <li><a href="#calculator">Calculator</a></li>
-      <li><button onclick="openModal()" class="btn-apply">Apply Now</button></li>
     </ul>
   </nav>
 
@@ -40,8 +43,7 @@
       <h1>Driven by <span>Excellence</span></h1>
       <p>Connecting Europe, One Haul at a Time on Truckline MP.</p>
       <div class="hero-buttons">
-        <button onclick="openModal()" class="btn-primary">Join Our Fleet</button>
-        <a href="#tracking" class="btn-secondary">View Live Fleet</a>
+        <a href="#tracking" class="btn-primary">View Live Fleet</a>
       </div>
     </div>
   </header>
@@ -180,30 +182,6 @@
       <div id="calc-result" class="result">Enter your mileage above to check rank progression.</div>
     </div>
   </section>
-
-  <!-- Application Modal -->
-  <div id="app-modal" class="modal">
-    <div class="modal-content">
-      <span class="close-modal" onclick="closeModal()">&times;</span>
-      <h2>Apply to Euro Logistics</h2>
-      <p class="modal-sub">Submit your details to start your driver application process.</p>
-      <form onsubmit="handleFormSubmit(event)">
-        <div class="form-group">
-          <label for="driver-name">In-Game / Steam Name:</label>
-          <input type="text" id="driver-name" required placeholder="Driver handle">
-        </div>
-        <div class="form-group">
-          <label for="driver-email">Email Address:</label>
-          <input type="email" id="driver-email" required placeholder="contact@example.com">
-        </div>
-        <div class="form-group">
-          <label for="driver-msg">Why do you want to join Euro Logistics?</label>
-          <textarea id="driver-msg" rows="3" placeholder="Tell us about your driving experience..."></textarea>
-        </div>
-        <button type="submit" class="btn-primary btn-full">Submit Driver Application</button>
-      </form>
-    </div>
-  </div>
 
   <footer>
     <div class="footer-content" style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; align-items: center; text-align: center;">
