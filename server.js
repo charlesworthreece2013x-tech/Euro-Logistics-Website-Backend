@@ -398,4 +398,262 @@ client.on('messageCreate', async message => {
   if (recentTimestamps.length > 5) {
     try {
       await message.delete();
-      const spamWarn = await
+      const spamWarn = await message.channel.send(`🚨 **${message.author.username}**, please slow down! You are sending messages too quickly.`);
+      setTimeout(() => spamWarn.delete().catch(() => {}), 5000);
+    } catch (error) {
+      console.error('Error handling spam protection:', error);
+    }
+  }
+});
+
+// 5. Handle Interactions & Slash Commands
+client.on('interactionCreate', async interaction => {
+  if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
+    const verifiedRole = interaction.options.getRole('verified_role');
+    const driverRole = interaction.options.getRole('driver_role');
+
+    const embed = {
+      color: 0x53B7ED,
+      title: 'Verification',
+      description: 'Welcome to **Euro Logistics VTC**!\n\nTo gain full access to our community channels, driver resources, and event updates, please verify your account below.\n\n### How to Verify:\n1. Click the **Verify** button below.\n2. Receive both your **Verified** and **Driver** roles automatically.',
+      footer: { text: 'Euro Logistics VTC • Driver Access System' },
+      timestamp: new Date().toISOString()
+    };
+
+    const verifyBtn = new ButtonBuilder()
+      .setCustomId(`verify_dual_${verifiedRole.id}_${driverRole.id}`)
+      .setLabel('Verify')
+      .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder().addComponents(verifyBtn);
+
+    await interaction.channel.send({ embeds: [embed], components: [row] });
+    await interaction.reply({ content: `✅ Verification panel posted! Users will receive **${verifiedRole.name}** and **${driverRole.name}** upon clicking verify.`, ephemeral: true });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'setup-counting') {
+    client.countingData.set(interaction.channel.id, { count: 0, lastUser: null });
+    await interaction.reply({ content: `✅ This channel has been successfully set up as the **Counting Game** channel! Start with **1**.` });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'setup-support') {
+    const SUPPORT_PANEL_CHANNEL_ID = '1564236425526775810';
+    const targetChannel = await interaction.guild.channels.fetch(SUPPORT_PANEL_CHANNEL_ID).catch(() => interaction.channel);
+
+    const supportEmbed = {
+      color: 0x53B7ED,
+      title: '🎫 Euro Logistics • Support Desk',
+      description: 'Need assistance with your driver application, telemetry, convoys, or community questions? \n\nClick the **Create Ticket** button below to open a private support channel with our management team.',
+      footer: { text: 'Euro Logistics VTC • Ticket Support System' },
+      timestamp: new Date().toISOString()
+    };
+
+    const ticketBtn = new ButtonBuilder()
+      .setCustomId('create_support_ticket')
+      .setLabel('Create Ticket')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('🎫');
+
+    const row = new ActionRowBuilder().addComponents(ticketBtn);
+
+    await targetChannel.send({ embeds: [supportEmbed], components: [row] });
+    await interaction.reply({ content: `✅ Support ticket panel successfully posted to <#${targetChannel.id}>!`, ephemeral: true });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'leaderboard') {
+    await interaction.deferReply();
+    try {
+      const port = process.env.PORT || 10000;
+      const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
+      const data = await response.json();
+
+      let leaderboardDescription = "";
+      if (!data.drivers || data.drivers.length === 0) {
+        leaderboardDescription = "ℹ️ *No drivers online or logged miles yet.*";
+      } else {
+        const sortedDrivers = data.drivers.sort((a, b) => b.miles - a.miles);
+        const medals = ['🥇', '🥈', '🥉'];
+        leaderboardDescription = sortedDrivers.map((driver, index) => {
+          const medal = medals[index] || `\`#${index + 1}\``;
+          return `${medal} **${driver.name}** — *${driver.miles.toLocaleString()} miles* (${driver.rank})`;
+        }).join('\n');
+      }
+
+      const leaderboardEmbed = {
+        color: 0x53B7ED,
+        title: '🚚 Euro Logistics • Driver Leaderboard',
+        description: `Here are our top drivers ranked by total logged miles fetched from website telemetry:\n\n${leaderboardDescription}\n\n**Total Fleet Miles:** \`${data.totalMiles.toLocaleString()} miles\``,
+        footer: { text: 'Euro Logistics VTC • Live Telemetry' },
+        timestamp: new Date().toISOString()
+      };
+      await interaction.editReply({ embeds: [leaderboardEmbed] });
+    } catch (error) {
+      console.error('Error fetching leaderboard telemetry:', error);
+      await interaction.editReply({ content: '❌ Failed to fetch driver telemetry data from website API.' });
+    }
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'fleet-status') {
+    await interaction.deferReply();
+    try {
+      const port = process.env.PORT || 10000;
+      const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
+      const data = await response.json();
+
+      const statusEmbed = {
+        color: 0x53B7ED,
+        title: '📊 Euro Logistics • Fleet Status',
+        fields: [
+          { name: 'Server Status', value: `\`${data.status}\``, inline: true },
+          { name: 'Active Drivers', value: `\`${data.activeDrivers}\``, inline: true },
+          { name: 'Total Miles Logged', value: `\`${data.totalMiles.toLocaleString()} miles\``, inline: false }
+        ],
+        footer: { text: 'Euro Logistics VTC • Web Backend Status' },
+        timestamp: new Date().toISOString()
+      };
+      await interaction.editReply({ embeds: [statusEmbed] });
+    } catch (error) {
+      console.error('Error fetching fleet status:', error);
+      await interaction.editReply({ content: '❌ Failed to connect to fleet status web API.' });
+    }
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'bot-status') {
+    const ALLOWED_CHANNEL_ID = '1564280861787033681'; 
+    if (interaction.channelId !== ALLOWED_CHANNEL_ID) {
+      return interaction.reply({ content: `❌ This command can only be used in <#${ALLOWED_CHANNEL_ID}>!`, ephemeral: true });
+    }
+
+    const uptimeSeconds = process.uptime();
+    const hours = Math.floor(uptimeSeconds / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const seconds = Math.floor(uptimeSeconds % 60);
+
+    const statusEmbed = {
+      color: 0x57F287,
+      title: '🟢 Euro Logistics Bot • System Status',
+      description: 'The Discord bot client and event loop are operating normally.',
+      fields: [
+        { name: 'Bot Ping', value: `\`${client.ws.ping}ms\``, inline: true },
+        { name: 'Uptime', value: `\`${hours}h ${minutes}m ${seconds}s\``, inline: true },
+        { name: 'Hosting Platform', value: '`Render`', inline: true }
+      ],
+      footer: { text: 'Euro Logistics VTC • Operational Health Check' },
+      timestamp: new Date().toISOString()
+    };
+    await interaction.reply({ embeds: [statusEmbed] });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'post-status') {
+    const title = interaction.options.getString('title');
+    const state = interaction.options.getString('state');
+    const severity = interaction.options.getString('severity');
+    const impactedInput = interaction.options.getString('impacted_services');
+    const details = interaction.options.getString('details');
+    const TARGET_CHANNEL_ID = '1564280861787033681';
+
+    const channel = await client.channels.fetch(TARGET_CHANNEL_ID).catch(() => null);
+    if (!channel) {
+      return interaction.reply({ content: '❌ Could not find the status channel.', ephemeral: true });
+    }
+
+    let color = 0x57F287;
+    if (severity === 'YELLOW') color = 0xFEE75C;
+    if (severity === 'RED') color = 0xED4245;
+
+    const servicesList = impactedInput.split(',').map(s => `• \`${s.trim()}\` — **${state}**`).join('\n');
+    const embed = {
+      color: color,
+      title: title,
+      description: `${details}\n\n### Impacted Services\n${servicesList}`,
+      footer: { text: `Euro Logistics Status • Updated by ${interaction.user.username}` },
+      timestamp: new Date().toISOString()
+    };
+
+    await channel.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Professional status update posted successfully to <#${TARGET_CHANNEL_ID}>!`, ephemeral: true });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'clear') {
+    const amount = interaction.options.getInteger('amount');
+    if (amount < 1 || amount > 100) {
+      return interaction.reply({ content: '❌ Please provide a number between **1 and 100**.', ephemeral: true });
+    }
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      const deleted = await interaction.channel.bulkDelete(amount, true);
+      await interaction.editReply({ content: `✅ Successfully cleared **${deleted.size}** messages from this channel!` });
+    } catch (error) {
+      console.error('Error clearing messages:', error);
+      await interaction.editReply({ content: '❌ Failed to clear messages (Discord prevents bulk-deleting messages older than 14 days).' });
+    }
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
+    const parts = interaction.customId.split('_');
+    const verifiedRoleId = parts[2];
+    const driverRoleId = parts[3];
+    const member = interaction.member;
+
+    try {
+      if (member.roles.cache.has(verifiedRoleId) && member.roles.cache.has(driverRoleId)) {
+        return await interaction.reply({ content: 'ℹ️ You are already fully verified in **Euro Logistics**!', ephemeral: true });
+      }
+      await member.roles.add(verifiedRoleId);
+      await member.roles.add(driverRoleId);
+      await interaction.reply({ content: '✅ Verification successful! Both your **Verified** and **Driver** roles have been assigned. Welcome to the fleet!', ephemeral: true });
+    } catch (error) {
+      console.error('Error assigning verification roles:', error);
+      await interaction.reply({ content: '❌ Failed to assign roles. Please check bot permissions.', ephemeral: true });
+    }
+  }
+
+  if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
+    await interaction.deferReply({ ephemeral: true });
+    const guild = interaction.guild;
+    const user = interaction.user;
+
+    try {
+      const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
+      if (existingChannel) {
+        return await interaction.editReply({ content: `❌ You already have an open support ticket: <#${existingChannel.id}>` });
+      }
+
+      const ticketChannel = await guild.channels.create({
+        name: `ticket-${user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+          { id: client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] }
+        ]
+      });
+
+      const ticketEmbed = {
+        color: 0x53B7ED,
+        title: `🎫 Support Ticket — ${user.username}`,
+        description: `Hello ${user}, welcome to your support ticket!\n\nPlease describe your issue or question below. When resolved, click **Close Ticket**.`,
+        footer: { text: 'Euro Logistics VTC • Support System' },
+        timestamp: new Date().toISOString()
+      };
+
+      const closeBtn = new ButtonBuilder().setCustomId('close_support_ticket').setLabel('Close Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒');
+      const row = new ActionRowBuilder().addComponents(closeBtn);
+
+      await ticketChannel.send({ content: `${user}`, embeds: [ticketEmbed], components: [row] });
+      await interaction.editReply({ content: `✅ Your support ticket has been created: <#${ticketChannel.id}>` });
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      await interaction.editReply({ content: '❌ Failed to create support ticket channel.' });
+    }
+  }
+
+  if (interaction.isButton() && interaction.customId === 'close_support_ticket') {
+    await interaction.reply({ content: '🔒 Closing ticket and deleting channel in 5 seconds...', ephemeral: false });
+    setTimeout(async () => {
+      try { await interaction.channel.delete(); } catch (e) {}
+    }, 5000);
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);
