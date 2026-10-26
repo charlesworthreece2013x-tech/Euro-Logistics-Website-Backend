@@ -31,6 +31,7 @@
       <li><a href="#rules">Rules</a></li>
       <li><a href="#team">Leadership</a></li>
       <li><a href="#calculator">Calculator</a></li>
+      <li><a href="#legal">Legal & Bot Terms</a></li>
     </ul>
   </nav>
 
@@ -140,7 +141,7 @@
     <p>Euro Logistics is a professional Virtual Trucking Company operating on Truckline MP. Built on respect, realistic driving, and community, we connect drivers across Europe in organized convoys and relaxed daily hauling operations.</p>
   </section>
 
-  <!-- Rules Accordion Section -->
+  <!-- Driver Rules Section -->
   <section id="rules" class="section">
     <h2>Driver Rules & Guidelines</h2>
     <div class="accordion">
@@ -181,11 +182,50 @@
     </div>
   </section>
 
+  <!-- Legal & Bot Documentation Section (Required for Discord Dev Portal) -->
+  <section id="legal" class="section">
+    <h2>Legal & Bot Compliance</h2>
+    
+    <div class="accordion">
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          Terms of Service <span class="acc-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          <p>By inviting or utilizing the <strong>Euro Logistics Discord Application</strong> within your server or community, you agree to the following terms:</p>
+          <ul style="margin-top: 10px; padding-left: 20px;">
+            <li>The Euro Logistics Bot is designed for VTC management, member logging, and driver operations.</li>
+            <li>Users must not exploit, spam, or attempt to compromise the bot or its API integrations.</li>
+            <li>The management team reserves the right to restrict bot features or access for violations of community rules.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          Privacy Policy <span class="acc-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          <p>We value the privacy of our drivers and community members:</p>
+          <ul style="margin-top: 10px; padding-left: 20px;">
+            <li><strong>Data Collection:</strong> The Euro Logistics Bot only collects standard Discord IDs, server IDs, and voluntary in-game mileage statistics to track VTC progress.</li>
+            <li><strong>Data Usage:</strong> Stored data is never sold, shared, or distributed to third parties.</li>
+            <li><strong>Data Removal:</strong> Drivers may request complete removal of their logged statistics by contacting Euro Logistics management via Discord.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <footer>
     <div class="footer-content" style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; align-items: center; text-align: center;">
       <p>&copy; 2026 Euro Logistics. All Rights Reserved. | Version 1.0</p>
       <div class="contact-info" style="color: var(--text-muted); font-size: 0.9rem;">
         <p><strong>Contact Us:</strong> Email: <a href="mailto:contact@eurologistics.com" style="color: var(--accent); text-decoration: none;">contact@eurologistics.com</a> | Discord: <a href="#" style="color: var(--accent); text-decoration: none;">discord.gg/eurologistics</a></p>
+        <p style="margin-top: 5px;">
+          <a href="#legal" style="color: var(--accent); text-decoration: none;">Terms of Service</a> &bull; 
+          <a href="#legal" style="color: var(--accent); text-decoration: none;">Privacy Policy</a>
+        </p>
       </div>
     </div>
   </footer>
