@@ -50,20 +50,20 @@ const client = new Client({
   ]
 });
 
-// Define the /news slash command
+// Define the /news slash command with optional file upload & spoiler toggle
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
-    .setDescription('Open the Interactive Euro Logistics News Dashboard')
+    .setDescription('Open the Euro Logistics News Dashboard')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addAttachmentOption(option =>
-      option.setName('media')
-        .setDescription('Upload image, video, or sound file')
+      option.setName('cover_file')
+        .setDescription('Upload cover image, video, or sound file (Optional)')
         .setRequired(false)
     )
     .addBooleanOption(option =>
       option.setName('spoiler')
-        .setDescription('Mark uploaded media as spoiler?')
+        .setDescription('Mark uploaded file as spoiler? (True/False)')
         .setRequired(false)
     )
 ];
@@ -90,61 +90,60 @@ client.once('ready', async () => {
   }
 });
 
-// Store active dashboard sessions
+// Store active dashboard sessions per user
 client.dashboardSessions = new Map();
 
 // 3. Handle Interactions
 client.on('interactionCreate', async interaction => {
   
-  // A. Trigger /news command -> Sends an interactive dashboard panel
+  // A. Trigger /news command -> Opens Dashboard Control Panel
   if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
-    const attachment = interaction.options.getAttachment('media');
+    const file = interaction.options.getAttachment('cover_file');
     const isSpoiler = interaction.options.getBoolean('spoiler') || false;
 
     client.dashboardSessions.set(interaction.user.id, {
-      attachment: attachment ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType } : null,
+      file: file ? { url: file.url, name: file.name, contentType: file.contentType } : null,
       spoiler: isSpoiler,
-      layout: 'banner', // Default: Image first / banner bottom
-      reactions: ['👍', '🎉', '❤️', '🔥', '🚚']
+      layout: 'banner' // Default layout: Image/Media first
     });
 
     const layoutSelect = new StringSelectMenuBuilder()
-      .setCustomId('dashboard_layout_select')
-      .setPlaceholder('Select News Layout Style...')
+      .setCustomId('news_layout_menu')
+      .setPlaceholder('Select Layout Style...')
       .addOptions([
         { label: 'Banner Style (Image / Media First at Bottom)', value: 'banner', description: 'Large media view underneath text' },
         { label: 'Side-by-Side Style (Thumbnail on Right)', value: 'side', description: 'Compact thumbnail next to text' }
       ]);
 
-    const openModalBtn = new ButtonBuilder()
-      .setCustomId('dashboard_open_modal')
-      .setLabel('✍️ Write Title & Post Content')
-      .setStyle(ButtonStyle.Primary);
+    const continueBtn = new ButtonBuilder()
+      .setCustomId('news_open_form_btn')
+      .setLabel('✍️ Enter Title & Markdown Post')
+      .setStyle(ButtonStyle.Success);
 
     const row1 = new ActionRowBuilder().addComponents(layoutSelect);
-    const row2 = new ActionRowBuilder().addComponents(openModalBtn);
+    const row2 = new ActionRowBuilder().addComponents(continueBtn);
 
     await interaction.reply({
-      content: `### 🚚 Euro Logistics News Dashboard\nConfigure your layout and content below:\n* **Attached Media:** ${attachment ? attachment.name : 'None'}\n* **Spoiler Enabled:** \`${isSpoiler}\``,
+      content: `### Euro Logistics News Dashboard\n* **Cover File Uploaded:** ${file ? file.name : 'None (Text Only)'}\n* **Spoiler Enabled:** \`${isSpoiler}\`\n\nChoose your layout below, then click to write your post content:`,
       components: [row1, row2],
       ephemeral: true
     });
   }
 
-  // B. Handle Layout Select Menu
-  if (interaction.isStringSelectMenu() && interaction.customId === 'dashboard_layout_select') {
+  // B. Handle Layout Selection Dropdown
+  if (interaction.isStringSelectMenu() && interaction.customId === 'news_layout_menu') {
     const session = client.dashboardSessions.get(interaction.user.id);
     if (session) {
       session.layout = interaction.values[0];
     }
-    await interaction.update({ content: `✅ Layout updated to: **${interaction.values[0].toUpperCase()}**` });
+    await interaction.update({ content: `✅ Layout style updated to: **${interaction.values[0].toUpperCase()}**\nClick the button below to proceed to the post editor.` });
   }
 
-  // C. Handle Button to Open Text Modal Form
-  if (interaction.isButton() && interaction.customId === 'dashboard_open_modal') {
+  // C. Handle Button to Open the Title & Markdown Modal Form
+  if (interaction.isButton() && interaction.customId === 'news_open_form_btn') {
     const modal = new ModalBuilder()
-      .setCustomId('dashboard_final_modal')
-      .setTitle('Euro Logistics News Content');
+      .setCustomId('news_publish_modal')
+      .setTitle('Euro Logistics News Editor');
 
     const titleInput = new TextInputBuilder()
       .setCustomId('news_title')
@@ -170,14 +169,14 @@ client.on('interactionCreate', async interaction => {
     await interaction.showModal(modal);
   }
 
-  // D. Handle Final Modal Submit & Publish
-  if (interaction.isModalSubmit() && interaction.customId === 'dashboard_final_modal') {
+  // D. Handle Final Modal Submission & Publish Post
+  if (interaction.isModalSubmit() && interaction.customId === 'news_publish_modal') {
     const title = interaction.fields.getTextInputValue('news_title');
     const postContent = interaction.fields.getTextInputValue('news_post');
-    const session = client.dashboardSessions.get(interaction.user.id) || { layout: 'banner', spoiler: false, reactions: ['👍', '🎉', '❤️', '🔥', '🚚'] };
+    const session = client.dashboardSessions.get(interaction.user.id) || { layout: 'banner', spoiler: false, file: null };
 
     const newsEmbed = {
-      color: 0x53B7ED,
+      color: 0x53B7ED, // Euro Logistics Blue
       title: title,
       description: postContent,
       footer: {
@@ -186,41 +185,43 @@ client.on('interactionCreate', async interaction => {
       timestamp: new Date().toISOString()
     };
 
-    let replyMessage;
+    let publishedMessage;
 
-    if (session.attachment) {
-      const isImage = session.attachment.contentType?.startsWith('image/');
+    if (session.file) {
+      const isImage = session.file.contentType?.startsWith('image/');
 
       if (isImage && !session.spoiler) {
         if (session.layout === 'side') {
-          newsEmbed.thumbnail = { url: session.attachment.url };
+          newsEmbed.thumbnail = { url: session.file.url };
         } else {
-          newsEmbed.image = { url: session.attachment.url };
+          newsEmbed.image = { url: session.file.url };
         }
-        replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
+        publishedMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
       } else {
-        const attachmentFile = new AttachmentBuilder(session.attachment.url, { 
-          name: session.attachment.name 
+        // Videos, audio sounds, or spoiler-tagged images
+        const attachmentFile = new AttachmentBuilder(session.file.url, { 
+          name: session.file.name 
         });
 
         if (session.spoiler) {
           attachmentFile.setSpoiler(true);
         }
 
-        replyMessage = await interaction.reply({
+        publishedMessage = await interaction.reply({
           embeds: [newsEmbed],
           files: [attachmentFile],
           fetchReply: true
         });
       }
     } else {
-      replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
+      publishedMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
     }
 
-    // Add plenty of reactions automatically
+    // Add plenty of automated reaction emojis
     try {
-      for (const emoji of session.reactions) {
-        await replyMessage.react(emoji);
+      const reactionsList = ['👍', '🎉', '❤️', '🔥', '🚚', '⭐'];
+      for (const emoji of reactionsList) {
+        await publishedMessage.react(emoji);
       }
     } catch (err) {
       console.error('Failed to add reactions:', err);
