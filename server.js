@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const { 
   Client, 
   GatewayIntentBits, 
@@ -12,13 +13,12 @@ const {
   ActivityType
 } = require('discord.js');
 
-// 1. Setup Express Web Server (Website & Fleet Telemetry API)
+// 1. Setup Express Web Server (Website, Static Files & Fleet Telemetry API)
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.get('/', (req, res) => {
-  res.send('Euro Logistics VTC Web Backend & Discord Bot is Online!');
-});
+// Serve static frontend files (HTML, CSS, JS, images) from the 'public' folder
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Telemetry API endpoint for live fleet stats
 app.get('/api/fleet-stats', (req, res) => {
@@ -28,6 +28,16 @@ app.get('/api/fleet-stats', (req, res) => {
     totalMiles: 0,
     drivers: []
   });
+});
+
+// Route the root URL to serve your main website frontend (index.html)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Catch-all fallback route to support page navigation
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
