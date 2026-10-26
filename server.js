@@ -8,7 +8,8 @@ const {
   PermissionFlagsBits,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  ActivityType
 } = require('discord.js');
 
 // 1. Setup Express Web Server (Website & Fleet Telemetry API)
@@ -25,7 +26,7 @@ app.get('/api/fleet-stats', (req, res) => {
     status: "ONLINE",
     activeDrivers: 0,
     totalMiles: 0,
-    drivers: [] // Populates automatically as drivers log miles on your website
+    drivers: []
   });
 });
 
@@ -70,6 +71,9 @@ const commands = [
     .setName('fleet-status')
     .setDescription('Check the overall live status and statistics of Euro Logistics'),
   new SlashCommandBuilder()
+    .setName('bot-status')
+    .setDescription('Check if the Discord bot and web backend are online and responding'),
+  new SlashCommandBuilder()
     .setName('clear')
     .setDescription('Bulk delete a specified number of messages from the channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
@@ -80,9 +84,15 @@ const commands = [
     )
 ];
 
-// Register slash commands on startup
+// Register slash commands and set online presence on startup
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
+
+  // Set live presence status so it shows online with activity
+  client.user.setPresence({
+    activities: [{ name: 'Euro Logistics VTC 🚚', type: ActivityType.Watching }],
+    status: 'online',
+  });
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
@@ -102,7 +112,6 @@ client.once('ready', async () => {
 client.countingData = new Map();
 const userMessageHistory = new Map();
 
-// Comprehensive blacklisted words and anti-invite links filter
 const BLACKLISTED_WORDS = [
   'fuck', 'shit', 'bitch', 'cunt', 'asshole', 'dick', 'pussy',
   'discord.gg/', 'discord.com/invite/', 't.me/', 'badword1', 'badword2'
@@ -149,9 +158,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // C. Advanced Moderation System (Profanity, Link Filter, & Anti-Spam Flood Protection)
-  
-  // 1. Blacklisted Words / Unauthorized Links Filter
+  // C. Advanced Moderation System
   if (BLACKLISTED_WORDS.some(word => contentLower.includes(word))) {
     try {
       await message.delete();
@@ -163,7 +170,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // 2. Anti-Spam / Anti-Flood Protection (Max 5 messages within 4 seconds)
+  // D. Anti-Spam / Anti-Flood Protection
   const userId = message.author.id;
   const now = Date.now();
   if (!userMessageHistory.has(userId)) {
@@ -190,7 +197,7 @@ client.on('messageCreate', async message => {
 // 4. Handle Interactions & Slash Commands
 client.on('interactionCreate', async interaction => {
   
-  // A. Execute /setup-verification (Dual Roles Panel)
+  // A. Execute /setup-verification
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
     const verifiedRole = interaction.options.getRole('verified_role');
     const driverRole = interaction.options.getRole('driver_role');
@@ -220,7 +227,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ This channel has been successfully set up as the **Counting Game** channel! Start with **1**.` });
   }
 
-  // C. Execute /leaderboard (Grabs telemetry data from website API)
+  // C. Execute /leaderboard
   if (interaction.isChatInputCommand() && interaction.commandName === 'leaderboard') {
     await interaction.deferReply();
 
@@ -254,7 +261,7 @@ client.on('interactionCreate', async interaction => {
       await interaction.editReply({ embeds: [leaderboardEmbed] });
     } catch (error) {
       console.error('Error fetching leaderboard telemetry:', error);
-      await interaction.editReply({ content: '❌ Failed to fetch driver telemetry data from the website API.' });
+      await interaction.editReply({ content: '❌ Failed to fetch driver telemetry data from website API.' });
     }
   }
 
@@ -282,11 +289,34 @@ client.on('interactionCreate', async interaction => {
       await interaction.editReply({ embeds: [statusEmbed] });
     } catch (error) {
       console.error('Error fetching fleet status:', error);
-      await interaction.editReply({ content: '❌ Failed to connect to the fleet status web API.' });
+      await interaction.editReply({ content: '❌ Failed to connect to fleet status web API.' });
     }
   }
 
-  // E. Execute /clear
+  // E. Execute /bot-status
+  if (interaction.isChatInputCommand() && interaction.commandName === 'bot-status') {
+    const uptimeSeconds = process.uptime();
+    const hours = Math.floor(uptimeSeconds / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const seconds = Math.floor(uptimeSeconds % 60);
+
+    const statusEmbed = {
+      color: 0x57F287,
+      title: '🟢 Euro Logistics Bot • System Status',
+      description: 'The Discord bot client and event loop are operating normally.',
+      fields: [
+        { name: 'Bot Ping', value: `\`${client.ws.ping}ms\``, inline: true },
+        { name: 'Uptime', value: `\`${hours}h ${minutes}m ${seconds}s\``, inline: true },
+        { name: 'Hosting Platform', value: '`Render`', inline: true }
+      ],
+      footer: { text: 'Euro Logistics VTC • Operational Health Check' },
+      timestamp: new Date().toISOString()
+    };
+
+    await interaction.reply({ embeds: [statusEmbed] });
+  }
+
+  // F. Execute /clear
   if (interaction.isChatInputCommand() && interaction.commandName === 'clear') {
     const amount = interaction.options.getInteger('amount');
 
@@ -309,7 +339,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // F. Handle Dual-Role "Verify" Button Click
+  // G. Handle Dual-Role "Verify" Button Click
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
@@ -334,7 +364,7 @@ client.on('interactionCreate', async interaction => {
     } catch (error) {
       console.error('Error assigning verification roles:', error);
       await interaction.reply({
-        content: '❌ Failed to assign roles. Please ensure my bot role is placed higher than both target roles in Server Settings > Roles!',
+        content: '❌ Failed to assign roles. Please ensure my bot role is dragged higher than both target roles in Server Settings > Roles!',
         ephemeral: true
       });
     }
