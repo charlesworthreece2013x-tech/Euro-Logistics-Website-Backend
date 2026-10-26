@@ -21,16 +21,54 @@ const PORT = process.env.PORT || 10000;
 // Serve static frontend files (HTML, CSS, JS, images) directly from the root folder
 app.use(express.static(path.join(__dirname)));
 
-// Telemetry API endpoint for live fleet stats (Configured for 'transit')
-app.get('/api/fleet-stats', (req, res) => {
-  res.json({
-    status: "ONLINE",
-    activeDrivers: 1,
-    totalMiles: 18450,
-    drivers: [
-      { name: "transit", rank: "VTC Owner", miles: 18450, status: "Driving ETS2" }
-    ]
-  });
+// Dynamic Telemetry API Endpoint connected to Multiplayer Map Network
+app.get('/api/fleet-stats', async (req, res) => {
+  const targetPlayer = 'transit'; // Your exact in-game profile name
+
+  try {
+    // Query live map network player search endpoint
+    const mapResponse = await fetch(`https://tracker.ets2map.com/v3/playersearch?string=${encodeURIComponent(targetPlayer)}`);
+    
+    let isOnline = false;
+    let serverName = 'ETS2 Multiplayer';
+
+    if (mapResponse.ok) {
+      const playerData = await mapResponse.json();
+      
+      // If the map tracker finds an active player session
+      if (Array.isArray(playerData) && playerData.length > 0) {
+        isOnline = true;
+        serverName = playerData[0].server || 'ETS2 Server';
+      }
+    }
+
+    const driversList = isOnline ? [
+      {
+        name: targetPlayer,
+        rank: "VTC Owner",
+        miles: 18450,
+        status: `Driving ETS2 (${serverName})`
+      }
+    ] : [];
+
+    res.json({
+      status: "ONLINE",
+      activeDrivers: driversList.length,
+      totalMiles: isOnline ? 18450 : 0,
+      drivers: driversList
+    });
+
+  } catch (error) {
+    console.error('Error fetching live player status from map network:', error.message);
+
+    // Dynamic fallback: If API fails, return clean default offline status
+    res.json({
+      status: "ONLINE",
+      activeDrivers: 0,
+      totalMiles: 0,
+      drivers: []
+    });
+  }
 });
 
 // Route the root URL to serve your main website frontend (index.html)
