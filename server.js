@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
   res.send('Euro Logistics VTC Web Backend & Discord Bot is Online!');
 });
 
-// Telemetry API endpoint initialized with empty driver state
+// Telemetry API endpoint for live fleet stats
 app.get('/api/fleet-stats', (req, res) => {
   res.json({
     status: "ONLINE",
@@ -65,7 +65,10 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('View top drivers ranked by miles grabbed from website telemetry')
+    .setDescription('View top drivers ranked by miles grabbed from website telemetry'),
+  new SlashCommandBuilder()
+    .setName('fleet-status')
+    .setDescription('Check the overall live status and statistics of Euro Logistics')
 ];
 
 // Register slash commands on startup
@@ -75,22 +78,26 @@ client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
   try {
-    console.log('Registering commands...');
+    console.log('Registering application commands...');
     await rest.put(
       Routes.applicationGuildCommands(client.user.id, '1564236424155373568'),
       { body: commands }
     );
-    console.log('Successfully registered commands!');
+    console.log('Successfully registered all commands!');
   } catch (error) {
-    console.error('Error registering slash command:', error);
+    console.error('Error registering slash commands:', error);
   }
 });
 
-// 3. Systems Memory (Counting & Advanced Anti-Spam Tracking)
+// 3. Systems Memory & Advanced Moderation Filters
 client.countingData = new Map();
-const userMessageHistory = new Map(); // Anti-spam rate limiter tracking
+const userMessageHistory = new Map();
 
-const BLACKLISTED_WORDS = ['discord.gg/', 't.me/', 'badword1', 'badword2'];
+// Comprehensive blacklisted words and anti-invite links filter
+const BLACKLISTED_WORDS = [
+  'fuck', 'shit', 'bitch', 'cunt', 'asshole', 'dick', 'pussy',
+  'discord.gg/', 'discord.com/invite/', 't.me/', 'badword1', 'badword2'
+];
 
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
@@ -103,14 +110,14 @@ client.on('messageCreate', async message => {
     if (!isNaN(parsedNumber)) {
       const expectedNumber = countingState.count + 1;
 
-      if (parsedNumber === expectedNumber && (countingState.count === 0 || message.author.id !== countingState.lastUser)) {
+      if (parsedNumber === expectedNumber) {
         countingState.count = expectedNumber;
         countingState.lastUser = message.author.id;
         await message.react('✅').catch(() => {});
         return;
       } else {
         await message.react('❌').catch(() => {});
-        const failMsg = await message.channel.send(`❌ **${message.author.username}** ruined the count at **${expectedNumber - 1}**! Restart from **1**.`);
+        const failMsg = await message.channel.send(`❌ **${message.author.username}** ruined the count at **${expectedNumber - 1}**! Expected **${expectedNumber}**, but got **${parsedNumber}**. Restart from **1**.`);
         setTimeout(() => failMsg.delete().catch(() => {}), 6000);
         
         countingState.count = 0;
@@ -119,20 +126,20 @@ client.on('messageCreate', async message => {
       }
     } else {
       await message.react('❌').catch(() => {});
-      const textWarn = await message.channel.send(`⚠️ **${message.author.username}**, only numbers are allowed here! Current count is **${countingState.count}**.`);
+      const textWarn = await message.channel.send(`⚠️ **${message.author.username}**, only numbers are allowed in this channel! Current count is **${countingState.count}**.`);
       setTimeout(() => textWarn.delete().catch(() => {}), 4000);
       return;
     }
   }
 
-  // B. Advanced Moderation System (Word Filter & Anti-Spam Flood Protection)
+  // B. Advanced Moderation System (Profanity, Link Filter, & Anti-Spam Flood Protection)
   const contentLower = message.content.toLowerCase();
   
-  // 1. Blacklisted Word / Link Filter
+  // 1. Blacklisted Words / Unauthorized Links Filter
   if (BLACKLISTED_WORDS.some(word => contentLower.includes(word))) {
     try {
       await message.delete();
-      const warningMsg = await message.channel.send(`⚠️ **${message.author.username}**, your message was removed because it contained restricted content.`);
+      const warningMsg = await message.channel.send(`⚠️ **${message.author.username}**, your message was removed because it contained restricted content, profanity, or unauthorized links.`);
       setTimeout(() => warningMsg.delete().catch(() => {}), 5000);
       return;
     } catch (error) {
@@ -150,7 +157,6 @@ client.on('messageCreate', async message => {
   const timestamps = userMessageHistory.get(userId);
   timestamps.push(now);
 
-  // Filter timestamps within the last 4 seconds
   const recentTimestamps = timestamps.filter(time => now - time < 4000);
   userMessageHistory.set(userId, recentTimestamps);
 
@@ -165,10 +171,10 @@ client.on('messageCreate', async message => {
   }
 });
 
-// 4. Handle Interactions & Commands
+// 4. Handle Interactions & Slash Commands
 client.on('interactionCreate', async interaction => {
   
-  // A. Execute /setup-verification (Dual Roles)
+  // A. Execute /setup-verification (Dual Roles Panel)
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
     const verifiedRole = interaction.options.getRole('verified_role');
     const driverRole = interaction.options.getRole('driver_role');
@@ -181,7 +187,6 @@ client.on('interactionCreate', async interaction => {
       timestamp: new Date().toISOString()
     };
 
-    // Store both role IDs separated by underscores in customId
     const verifyBtn = new ButtonBuilder()
       .setCustomId(`verify_dual_${verifiedRole.id}_${driverRole.id}`)
       .setLabel('Verify')
@@ -237,7 +242,35 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // D. Handle Dual-Role "Verify" Button Click
+  // D. Execute /fleet-status
+  if (interaction.isChatInputCommand() && interaction.commandName === 'fleet-status') {
+    await interaction.deferReply();
+
+    try {
+      const port = process.env.PORT || 10000;
+      const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
+      const data = await response.json();
+
+      const statusEmbed = {
+        color: 0x53B7ED,
+        title: '📊 Euro Logistics • Fleet Status',
+        fields: [
+          { name: 'Server Status', value: `\`${data.status}\``, inline: true },
+          { name: 'Active Drivers', value: `\`${data.activeDrivers}\``, inline: true },
+          { name: 'Total Miles Logged', value: `\`${data.totalMiles.toLocaleString()} miles\``, inline: false }
+        ],
+        footer: { text: 'Euro Logistics VTC • Web Backend Status' },
+        timestamp: new Date().toISOString()
+      };
+
+      await interaction.editReply({ embeds: [statusEmbed] });
+    } catch (error) {
+      console.error('Error fetching fleet status:', error);
+      await interaction.editReply({ content: '❌ Failed to connect to the fleet status web API.' });
+    }
+  }
+
+  // E. Handle Dual-Role "Verify" Button Click
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
