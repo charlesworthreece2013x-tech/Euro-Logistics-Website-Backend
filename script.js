@@ -85,6 +85,6 @@ function toggleAccordion(button) {
   }
 }
 
-// Poll backend every 1 second
+// Initial fetch and poll backend every 1 second
 fetchNodeStats();
 setInterval(fetchNodeStats, 1000);
