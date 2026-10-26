@@ -15,712 +15,181 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
   
-  <style>
-    :root {
-      --bg-color: #0b0f19;
-      --card-bg: #131c2e;
-      --accent: #53B7ED;
-      --accent-hover: #3895c8;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --border: #1e293b;
-      --danger: #ef4444;
-      --success: #22c55e;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Fira Sans', sans-serif; }
-    body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
-
-    /* Navigation Bar */
-    .navbar {
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--border);
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .logo { font-size: 1.25rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 0.75rem; cursor: pointer; letter-spacing: 0.5px; }
-    .nav-logo-img { width: 32px; height: 32px; object-fit: contain; }
-    
-    .nav-links { display: flex; gap: 1.5rem; align-items: center; list-style: none; }
-    .nav-links a { color: var(--text-muted); text-decoration: none; font-weight: 500; cursor: pointer; transition: color 0.2s; }
-    .nav-links a:hover, .nav-links a.active { color: var(--accent); }
-
-    .btn-primary {
-      background: var(--accent); color: #0b0f19; border: none; padding: 0.6rem 1.2rem;
-      border-radius: 0.375rem; font-weight: 700; cursor: pointer; transition: background 0.2s, transform 0.1s;
-      text-decoration: none; display: inline-block;
-    }
-    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
-    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 600; cursor: pointer; }
-    .btn-outline:hover { background: var(--border); }
-
-    .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; flex: 1; width: 100%; }
-    .view { display: none; }
-    .view.active { display: block; }
-
-    /* Hero Section */
-    .hero {
-      text-align: center; padding: 5rem 1rem; background: linear-gradient(to bottom, var(--card-bg), var(--bg-color));
-      border-radius: 1rem; border: 1px solid var(--border); margin-bottom: 2rem;
-    }
-    .hero-logo-img { width: 64px; height: 64px; margin-bottom: 1rem; object-fit: contain; }
-    .hero h1 { font-size: 3rem; margin-bottom: 1rem; font-weight: 800; }
-    .hero h1 span { color: var(--accent); }
-    .hero p { color: var(--text-muted); font-size: 1.2rem; max-width: 600px; margin: 0 auto 2rem auto; }
-
-    /* Live Telemetry Stats Bar */
-    .stats-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 3rem;
-      max-width: 1100px; margin-left: auto; margin-right: auto; padding: 0 1rem;
-    }
-    .stat-card {
-      background: var(--card-bg); border: 1px solid var(--border); padding: 1.5rem; border-radius: 0.5rem; text-align: center;
-    }
-    .stat-card h3 { font-size: 1.5rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .stat-card p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
-    .svg-icon { width: 16px; height: 16px; fill: currentColor; }
-    .svg-green { color: var(--success); }
-    .status-beacon { width: 10px; height: 10px; background-color: var(--success); border-radius: 50%; display: inline-block; box-shadow: 0 0 8px var(--success); }
-
-    /* Sections */
-    .section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.75rem; padding: 2.5rem; margin-bottom: 2rem; }
-    .section h2 { margin-bottom: 1rem; color: var(--accent); font-size: 1.8rem; }
-    .section p { color: var(--text-muted); line-height: 1.6; }
-    .section-subtitle { color: var(--text-muted); margin-bottom: 1.5rem; }
-
-    /* Map Portal & Driver Table */
-    .map-portal-card {
-      background: var(--bg-color); border: 1px solid var(--border); border-radius: 0.5rem; padding: 2.5rem; text-align: center; margin-bottom: 2rem; position: relative; overflow: hidden;
-    }
-    .map-overlay-badge {
-      position: absolute; top: 1rem; right: 1rem; background: var(--card-bg); border: 1px solid var(--border); padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px; color: var(--text-main);
-    }
-    .radar-box { background: var(--bg-color); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; margin-top: 1.5rem; }
-    .radar-header { background: var(--card-bg); padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
-    .time-stamp { margin-left: auto; color: var(--text-muted); font-size: 0.8rem; }
-    
-    .driver-table-wrapper { overflow-x: auto; }
-    .driver-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
-    .driver-table th, .driver-table td { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
-    .driver-table th { color: var(--text-muted); font-weight: 600; background: rgba(19, 28, 46, 0.5); }
-    .driver-table td { color: var(--text-main); }
-    .loading-cell { text-align: center; color: var(--text-muted); padding: 2rem !important; }
-
-    /* Leadership Team Grid */
-    .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
-    .team-card { background: var(--bg-color); border: 1px solid var(--border); border-radius: 0.5rem; padding: 2rem; text-align: center; position: relative; }
-    .badge-owner { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #0b0f19; font-size: 0.7rem; font-weight: 800; padding: 0.2rem 0.7rem; border-radius: 10px; letter-spacing: 0.5px; }
-    .team-avatar { width: 72px; height: 72px; border-radius: 50%; margin: 0.5rem auto 1rem auto; display: block; border: 2px solid var(--accent); object-fit: contain; background: var(--card-bg); }
-    .team-card h3 { font-size: 1.2rem; margin-bottom: 0.25rem; }
-    .team-role { color: var(--accent); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem; }
-    .team-bio { font-size: 0.9rem; color: var(--text-muted); }
-
-    /* Accordion Rules & Legal */
-    .accordion { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
-    .accordion-item { background: var(--bg-color); border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; }
-    .accordion-header { width: 100%; background: none; border: none; padding: 1rem 1.25rem; text-align: left; color: var(--text-main); font-size: 1rem; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-    .accordion-header:hover { color: var(--accent); }
-    .acc-icon { font-size: 1.2rem; font-weight: 400; color: var(--accent); transition: transform 0.2s; }
-    .accordion-content { padding: 0 1.25rem 1.25rem 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.5; display: none; }
-    .accordion-item.active .accordion-content { display: block; }
-    .accordion-item.active .acc-icon { transform: rotate(45deg); }
-
-    /* Calculator Box */
-    .calc-box { background: var(--bg-color); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.5rem; margin-top: 1rem; }
-    .calc-box label { display: block; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500; }
-    .calc-box input { width: 100%; padding: 0.75rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.375rem; color: var(--text-main); font-size: 1rem; margin-bottom: 1rem; }
-    .calc-box input:focus { outline: none; border-color: var(--accent); }
-    .result { font-weight: 600; color: var(--accent); font-size: 1rem; }
-
-    /* News Feed Styles */
-    .news-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-    .news-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
-    .news-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 0.5rem; padding: 2rem; }
-    .news-card h2 { margin-bottom: 0.5rem; color: var(--accent); font-size: 1.5rem; }
-    .news-meta { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; }
-    .news-content { line-height: 1.6; color: var(--text-main); margin-bottom: 1rem; }
-    
-    .media-container { margin: 1.25rem 0; display: flex; flex-direction: column; gap: 1rem; }
-    .media-container img, .media-container video { max-width: 100%; max-height: 450px; border-radius: 0.375rem; object-fit: cover; border: 1px solid var(--border); }
-    .media-container audio { width: 100%; }
-
-    details { background: #070a12; border: 1px dashed var(--border); padding: 1rem; border-radius: 0.375rem; margin: 1rem 0; }
-    details summary { cursor: pointer; color: var(--accent); font-weight: 600; outline: none; }
-    details p { margin-top: 0.75rem; color: var(--text-muted); line-height: 1.5; }
-
-    /* Auth & Admin Form Layouts */
-    .auth-container, .admin-panel {
-      max-width: 500px; margin: 3rem auto; background: var(--card-bg); border: 1px solid var(--border); padding: 2.5rem; border-radius: 0.75rem;
-    }
-    .admin-panel { max-width: 700px; }
-    .auth-container h2, .admin-panel h2 { margin-bottom: 1.5rem; text-align: center; color: var(--accent); }
-    .form-group { margin-bottom: 1.25rem; }
-    .form-group label { display: block; font-size: 0.9rem; margin-bottom: 0.4rem; color: var(--text-muted); font-weight: 500; }
-    .form-group input, .form-group textarea {
-      width: 100%; padding: 0.75rem; background: var(--bg-color); border: 1px solid var(--border); border-radius: 0.375rem; color: var(--text-main); font-size: 1rem;
-    }
-    .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
-    .auth-container button, .admin-panel button { width: 100%; margin-top: 1rem; }
-
-    footer { text-align: center; padding: 2rem; background: var(--card-bg); border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.9rem; margin-top: auto; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- Navigation Bar -->
   <nav class="navbar">
-    <div class="logo" onclick="switchView('home')">
+    <div class="logo">
       <img src="favicon.ico" alt="Euro Logistics Logo" class="nav-logo-img">
       <span>EURO LOGISTICS</span>
     </div>
     <ul class="nav-links">
-      <li><a onclick="switchView('home')" class="active" id="nav-home">Home</a></li>
-      <li><a onclick="switchView('news')" id="nav-news">News & Media</a></li>
-      <li><a onclick="switchView('admin')" id="nav-admin" style="display:none;">Admin Panel</a></li>
-      <div id="auth-nav-items" style="display: flex; gap: 1rem; align-items: center;">
-        <li><a onclick="switchView('login')" id="nav-login">Login</a></li>
-        <li><a onclick="switchView('signup')" id="nav-signup" class="btn-primary" style="padding: 0.4rem 1rem;">Sign Up</a></li>
-      </div>
-      <div id="user-nav-items" style="display: none; gap: 1rem; align-items: center;">
-        <span id="username-display" style="color: var(--accent); font-weight: 600;"></span>
-        <button class="btn-outline" onclick="logout()" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Logout</button>
-      </div>
+      <li><a href="#about">About</a></li>
+      <li><a href="#tracking">Live Tracking</a></li>
+      <li><a href="#rules">Rules</a></li>
+      <li><a href="#team">Leadership</a></li>
+      <li><a href="#calculator">Calculator</a></li>
     </ul>
   </nav>
 
-  <div class="container">
-
-    <!-- HOME VIEW -->
-    <div id="view-home" class="view active">
-      <!-- Hero Section -->
-      <header class="hero">
-        <div class="hero-content">
-          <img src="favicon.ico" alt="Euro Logistics Emblem" class="hero-logo-img">
-          <h1>Driven by <span>Excellence</span></h1>
-          <p>Connecting Europe, One Haul at a Time on Truckline MP.</p>
-          <div class="hero-buttons">
-            <a href="#tracking" class="btn-primary" onclick="switchView('home')">View Live Fleet</a>
-          </div>
-        </div>
-      </header>
-
-      <!-- Live Telemetry Stats Bar -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <h3 id="stat-status">
-            <span class="status-beacon"></span>
-            ONLINE
-          </h3>
-          <p>Node.js Telemetry</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="stat-drivers">3 Active</h3>
-          <p>Drivers on Duty</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="stat-miles">31,750 mi</h3>
-          <p>Fleet Mileage Logged</p>
-        </div>
-        <div class="stat-card">
-          <h3>Truckline MP</h3>
-          <p>Official Platform</p>
-        </div>
-      </div>
-
-      <!-- Real-Time Truckline MP Map Portal Section -->
-      <section id="tracking" class="section">
-        <h2>Real-Time Fleet Radar</h2>
-        <p class="section-subtitle">Live European tracking and active driver dispatch via Truckline MP & Node.js backend.</p>
-
-        <!-- Truckline MP Map Portal Card -->
-        <div class="map-portal-card">
-          <div class="map-overlay-badge">
-            <span class="status-beacon"></span>
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-            Truckline MP Live Map Network
-          </div>
-          <div class="map-portal-content">
-            <svg class="svg-icon" style="width: 56px; height: 56px; margin-bottom: 1rem; color: var(--accent);" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-            <h3>Access Truckline MP Live Map</h3>
-            <p>View real-time European traffic, player positions, and convoy routes instantly on the official Truckline MP network grid.</p>
-            <a href="https://map.trucklinemp.com/" target="_blank" rel="noopener noreferrer" class="btn-primary" style="margin-top: 1rem; display: inline-flex; align-items: center; gap: 8px;">
-              Launch Official Map
-              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
-            </a>
-          </div>
-        </div>
-
-        <!-- Live Telemetry Driver Table -->
-        <div class="radar-box">
-          <div class="radar-header">
-            <span class="status-beacon"></span>
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2 z"/></svg>
-            <strong>Node.js Telemetry Stream (Real-Time)</strong>
-            <span id="last-updated" class="time-stamp">Live</span>
-          </div>
-          <div class="driver-table-wrapper">
-            <table class="driver-table">
-              <thead>
-                <tr>
-                  <th>Driver</th>
-                  <th>Rank</th>
-                  <th>Logged Miles</th>
-                  <th>Duty Status</th>
-                </tr>
-              </thead>
-              <tbody id="driver-list">
-                <tr>
-                  <td>Euro Logistics</td>
-                  <td>CEO / Founder</td>
-                  <td>15,400 mi</td>
-                  <td><span style="color: var(--success);">● On Duty</span></td>
-                </tr>
-                <tr>
-                  <td>RoadCaptain_99</td>
-                  <td>Senior Driver</td>
-                  <td>9,850 mi</td>
-                  <td><span style="color: var(--success);">● On Duty</span></td>
-                </tr>
-                <tr>
-                  <td>TruckerDave</td>
-                  <td>Driver</td>
-                  <td>6,500 mi</td>
-                  <td><span style="color: var(--success);">● On Duty</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- VTC Owner & Management Team -->
-      <section id="team" class="section">
-        <h2>VTC Leadership</h2>
-        <div class="team-grid">
-          <div class="team-card owner-card">
-            <div class="badge-owner">VTC OWNER & FOUNDER</div>
-            <img src="favicon.ico" alt="Owner Avatar" class="team-avatar">
-            <h3>Euro Logistics</h3>
-            <p class="team-role">Chief Executive Officer</p>
-            <p class="team-bio">Managing fleet operations, company events, and driver recruitment on Truckline MP.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- About Section -->
-      <section id="about" class="section">
-        <h2>About Euro Logistics</h2>
-        <p>Euro Logistics is a professional Virtual Trucking Company operating on Truckline MP. Built on respect, realistic driving, and community, we connect drivers across Europe in organized convoys and relaxed daily hauling operations.</p>
-      </section>
-
-      <!-- Driver Rules Section -->
-      <section id="rules" class="section">
-        <h2>Driver Rules & Guidelines</h2>
-        <div class="accordion">
-          <div class="accordion-item">
-            <button class="accordion-header" onclick="toggleAccordion(this)">
-              1. General Conduct <span class="acc-icon">+</span>
-            </button>
-            <div class="accordion-content">
-              Respect all drivers both inside and outside the company. Toxic behavior, discrimination, or drama will result in immediate removal from the VTC.
-            </div>
-          </div>
-          <div class="accordion-item">
-            <button class="accordion-header" onclick="toggleAccordion(this)">
-              2. In-Game Rules <span class="acc-icon">+</span>
-            </button>
-            <div class="accordion-content">
-              Follow all Truckline MP traffic regulations and server guidelines. Maintain realistic driving standards and keep your player tag visible.
-            </div>
-          </div>
-          <div class="accordion-item">
-            <button class="accordion-header" onclick="toggleAccordion(this)">
-              3. Convoy Rules <span class="acc-icon">+</span>
-            </button>
-            <div class="accordion-content">
-              Maintain safe braking distance during convoys (minimum 70-100 meters). Follow instructions given by Convoy Control (CC) leads at all times.
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Calculator Section -->
-      <section id="calculator" class="section">
-        <h2>Mileage & Rank Calculator</h2>
-        <div class="calc-box">
-          <label for="miles">Enter Monthly Kilometers / Miles:</label>
-          <input type="number" id="miles" placeholder="e.g. 5000" oninput="calculateRank()">
-          <div id="calc-result" class="result">Enter your mileage above to check rank progression.</div>
-        </div>
-      </section>
-
-      <!-- Legal & Bot Documentation Section -->
-      <section id="legal" class="section">
-        <h2>Legal & Bot Compliance</h2>
-        <div class="accordion">
-          <div class="accordion-item">
-            <button class="accordion-header" onclick="toggleAccordion(this)">
-              Terms of Service <span class="acc-icon">+</span>
-            </button>
-            <div class="accordion-content">
-              <p>By inviting or utilizing the <strong>Euro Logistics Discord Application</strong> within your server or community, you agree to the following terms:</p>
-              <ul style="margin-top: 10px; padding-left: 20px;">
-                <li>The Euro Logistics Bot is designed for VTC management, member logging, and driver operations.</li>
-                <li>Users must not exploit, spam, or attempt to compromise the bot or its API integrations.</li>
-                <li>The management team reserves the right to restrict bot features or access for violations of community rules.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="accordion-item">
-            <button class="accordion-header" onclick="toggleAccordion(this)">
-              Privacy Policy <span class="acc-icon">+</span>
-            </button>
-            <div class="accordion-content">
-              <p>We value the privacy of our drivers and community members:</p>
-              <ul style="margin-top: 10px; padding-left: 20px;">
-                <li><strong>Data Collection:</strong> The Euro Logistics Bot only collects standard Discord IDs, server IDs, and voluntary in-game mileage statistics to track VTC progress.</li>
-                <li><strong>Data Usage:</strong> Stored data is never sold, shared, or distributed to third parties.</li>
-                <li><strong>Data Removal:</strong> Drivers may request complete removal of their logged statistics by contacting Euro Logistics management via Discord.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- NEWS VIEW -->
-    <div id="view-news" class="view">
-      <div class="news-header">
-        <h2>Company News & Advanced Media Feed</h2>
-      </div>
-      <div class="news-grid" id="news-feed-container">
-        <!-- Dynamically populated articles appear here -->
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="hero-content">
+      <img src="favicon.ico" alt="Euro Logistics Emblem" class="hero-logo-img">
+      <h1>Driven by <span>Excellence</span></h1>
+      <p>Connecting Europe, One Haul at a Time on Truckline MP.</p>
+      <div class="hero-buttons">
+        <a href="#tracking" class="btn-primary">View Live Fleet</a>
       </div>
     </div>
+  </header>
 
-    <!-- LOGIN VIEW -->
-    <div id="view-login" class="view">
-      <div class="auth-container">
-        <h2>Driver Portal Login</h2>
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="login-username" placeholder="Enter your username">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="login-password" placeholder="••••••••">
-        </div>
-        <button class="btn-primary" onclick="handleLogin()">Login</button>
-      </div>
+  <!-- Live Telemetry Stats Bar -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3 id="stat-status">
+        <svg class="svg-icon svg-green" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+        ONLINE
+      </h3>
+      <p>Node.js Telemetry</p>
     </div>
-
-    <!-- SIGNUP VIEW -->
-    <div id="view-signup" class="view">
-      <div class="auth-container">
-        <h2>Driver Recruitment Sign Up</h2>
-        <div class="form-group">
-          <label>Choose Username</label>
-          <input type="text" id="signup-username" placeholder="Enter unique username">
-        </div>
-        <div class="form-group">
-          <label>Choose Password</label>
-          <input type="password" id="signup-password" placeholder="Choose secure password">
-        </div>
-        <button class="btn-primary" onclick="handleSignup()">Submit Application</button>
-      </div>
+    <div class="stat-card">
+      <h3 id="stat-drivers">3 Active</h3>
+      <p>Drivers on Duty</p>
     </div>
-
-    <!-- ADMIN VIEW -->
-    <div id="view-admin" class="view">
-      <div class="admin-panel">
-        <h2>Administration Panel — Publish Advanced News</h2>
-        <div class="form-group">
-          <label>Headline Title</label>
-          <input type="text" id="admin-title" placeholder="Enter article title">
-        </div>
-        <div class="form-group">
-          <label>Article Content</label>
-          <textarea id="admin-content" rows="4" placeholder="Write main announcement text..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>Image URL (Optional)</label>
-          <input type="text" id="admin-image" placeholder="https://example.com/image.jpg">
-        </div>
-        <div class="form-group">
-          <label>Video URL (Optional)</label>
-          <input type="text" id="admin-video" placeholder="https://example.com/video.mp4">
-        </div>
-        <div class="form-group">
-          <label>Audio Clip URL (Optional)</label>
-          <input type="text" id="admin-audio" placeholder="https://example.com/audio.mp3">
-        </div>
-        <div class="form-group">
-          <label>Spoiler Tag Title (Optional)</label>
-          <input type="text" id="admin-spoiler-title" placeholder="e.g. Confidential Route Information">
-        </div>
-        <div class="form-group">
-          <label>Hidden Spoiler Content (Optional)</label>
-          <textarea id="admin-spoiler-text" rows="2" placeholder="Secret confidential details revealed upon clicking..."></textarea>
-        </div>
-        <button class="btn-primary" onclick="publishNews()">Publish to Feed</button>
-      </div>
+    <div class="stat-card">
+      <h3 id="stat-miles">31,750 mi</h3>
+      <p>Fleet Mileage Logged</p>
     </div>
-
+    <div class="stat-card">
+      <h3>Truckline MP</h3>
+      <p>Official Platform</p>
+    </div>
   </div>
+
+  <!-- Real-Time Truckline MP Map Portal Section -->
+  <section id="tracking" class="section section-wide">
+    <h2>Real-Time Fleet Radar</h2>
+    <p class="section-subtitle">Live European tracking and active driver dispatch via Truckline MP & Node.js backend.</p>
+
+    <!-- Truckline MP Map Portal Card -->
+    <div class="map-portal-card">
+      <div class="map-overlay-badge">
+        <span class="status-beacon"></span>
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        Truckline MP Live Map Network
+      </div>
+      <div class="map-portal-content">
+        <svg class="svg-icon" style="width: 56px; height: 56px; margin-bottom: 1rem; color: var(--accent);" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+        <h3>Access Truckline MP Live Map</h3>
+        <p>View real-time European traffic, player positions, and convoy routes instantly on the official Truckline MP network grid.</p>
+        <a href="https://map.trucklinemp.com/" target="_blank" rel="noopener noreferrer" class="btn-primary" style="margin-top: 1rem; display: inline-flex; align-items: center; gap: 8px;">
+          Launch Official Map
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- Live Telemetry Driver Table -->
+    <div class="radar-box">
+      <div class="radar-header">
+        <span class="status-beacon"></span>
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2 z"/></svg>
+        <strong>Node.js Telemetry Stream (Real-Time)</strong>
+        <span id="last-updated" class="time-stamp">Live</span>
+      </div>
+      <div class="driver-table-wrapper">
+        <table class="driver-table">
+          <thead>
+            <tr>
+              <th>Driver</th>
+              <th>Rank</th>
+              <th>Logged Miles</th>
+              <th>Duty Status</th>
+            </tr>
+          </thead>
+          <tbody id="driver-list">
+            <tr>
+              <td colspan="4" class="loading-cell">Connecting to Euro Logistics Node.js Server...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- VTC Owner & Management Team -->
+  <section id="team" class="section">
+    <h2>VTC Leadership</h2>
+    <div class="team-grid">
+      <div class="team-card owner-card">
+        <div class="badge-owner">VTC OWNER & FOUNDER</div>
+        <img src="favicon.ico" alt="Owner Avatar" class="team-avatar">
+        <h3>Euro Logistics</h3>
+        <p class="team-role">Chief Executive Officer</p>
+        <p class="team-bio">Managing fleet operations, company events, and driver recruitment on Truckline MP.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- About Section -->
+  <section id="about" class="section">
+    <h2>About Euro Logistics</h2>
+    <p>Euro Logistics is a professional Virtual Trucking Company operating on Truckline MP. Built on respect, realistic driving, and community, we connect drivers across Europe in organized convoys and relaxed daily hauling operations.</p>
+  </section>
+
+  <!-- Rules Accordion Section -->
+  <section id="rules" class="section">
+    <h2>Driver Rules & Guidelines</h2>
+    <div class="accordion">
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          1. General Conduct <span class="acc-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          Respect all drivers both inside and outside the company. Toxic behavior, discrimination, or drama will result in immediate removal from the VTC.
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          2. In-Game Rules <span class="acc-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          Follow all Truckline MP traffic regulations and server guidelines. Maintain realistic driving standards and keep your player tag visible.
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-header" onclick="toggleAccordion(this)">
+          3. Convoy Rules <span class="acc-icon">+</span>
+        </button>
+        <div class="accordion-content">
+          Maintain safe braking distance during convoys (minimum 70-100 meters). Follow instructions given by Convoy Control (CC) leads at all times.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Calculator Section -->
+  <section id="calculator" class="section">
+    <h2>Mileage & Rank Calculator</h2>
+    <div class="calc-box">
+      <label for="miles">Enter Monthly Kilometers / Miles:</label>
+      <input type="number" id="miles" placeholder="e.g. 5000" oninput="calculateRank()">
+      <div id="calc-result" class="result">Enter your mileage above to check rank progression.</div>
+    </div>
+  </section>
 
   <footer>
     <div class="footer-content" style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; align-items: center; text-align: center;">
-      <p>&copy; 2026 Euro Logistics. All Rights Reserved. | Truckline MP VTC Platform</p>
+      <p>&copy; 2026 Euro Logistics. All Rights Reserved. | Version 1.0</p>
       <div class="contact-info" style="color: var(--text-muted); font-size: 0.9rem;">
         <p><strong>Contact Us:</strong> Email: <a href="mailto:contact@eurologistics.com" style="color: var(--accent); text-decoration: none;">contact@eurologistics.com</a> | Discord: <a href="#" style="color: var(--accent); text-decoration: none;">discord.gg/eurologistics</a></p>
       </div>
     </div>
   </footer>
 
-  <script>
-    let currentUser = JSON.parse(localStorage.getItem('vtc_current_user')) || null;
-
-    function updateUIState() {
-      const authNav = document.getElementById('auth-nav-items');
-      const userNav = document.getElementById('user-nav-items');
-      const usernameDisp = document.getElementById('username-display');
-      const navAdmin = document.getElementById('nav-admin');
-
-      if (currentUser) {
-        authNav.style.display = 'none';
-        userNav.style.display = 'flex';
-        usernameDisp.textContent = currentUser.username;
-
-        if (currentUser.isAdmin) {
-          navAdmin.style.display = 'block';
-        } else {
-          navAdmin.style.display = 'none';
-        }
-      } else {
-        authNav.style.display = 'flex';
-        userNav.style.display = 'none';
-        navAdmin.style.display = 'none';
-      }
-    }
-
-    function switchView(viewId) {
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
-
-      document.getElementById(`view-${viewId}`).classList.add('active');
-      const navEl = document.getElementById(`nav-${viewId}`);
-      if(navEl) navEl.classList.add('active');
-
-      if (viewId === 'news') {
-        fetchNewsFeed();
-      }
-      if (viewId === 'home') {
-        fetchFleetStats();
-      }
-    }
-
-    function toggleAccordion(button) {
-      const item = button.parentElement;
-      item.classList.toggle('active');
-    }
-
-    function calculateRank() {
-      const miles = parseInt(document.getElementById('miles').value) || 0;
-      const resultDiv = document.getElementById('calc-result');
-      let rank = 'Trainee Driver';
-      if (miles >= 10000) rank = 'Elite Veteran Driver 🥇';
-      else if (miles >= 5000) rank = 'Senior Driver 🥈';
-      else if (miles >= 2000) rank = 'Driver 🥉';
-      resultDiv.textContent = `Progress Rank: ${rank} (${miles.toLocaleString()} miles logged)`;
-    }
-
-    async function handleSignup() {
-      const username = document.getElementById('signup-username').value.trim();
-      const password = document.getElementById('signup-password').value.trim();
-
-      if (!username || !password) {
-        alert('Please fill in both fields.');
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        const data = await res.json();
-        if (data.success) {
-          alert('Account successfully created! Please log in.');
-          switchView('login');
-        } else {
-          alert(data.error || 'Signup failed.');
-        }
-      } catch (err) {
-        // Fallback local storage handling if offline/static
-        let users = JSON.parse(localStorage.getItem('vtc_local_users') || '[]');
-        if (users.some(u => u.username === username)) {
-          alert('Username already exists.');
-          return;
-        }
-        users.push({ username, password, isAdmin: false });
-        localStorage.setItem('vtc_local_users', JSON.stringify(users));
-        alert('Account successfully created! Please log in.');
-        switchView('login');
-      }
-    }
-
-    async function handleLogin() {
-      const username = document.getElementById('login-username').value.trim();
-      const password = document.getElementById('login-password').value.trim();
-
-      try {
-        const res = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        const data = await res.json();
-        if (data.success) {
-          currentUser = data.user;
-          localStorage.setItem('vtc_current_user', JSON.stringify(currentUser));
-          updateUIState();
-          switchView('home');
-        } else {
-          alert(data.error || 'Login failed.');
-        }
-      } catch (err) {
-        // Fallback local storage login
-        let users = JSON.parse(localStorage.getItem('vtc_local_users') || '[{"username":"admin","password":"admin123","isAdmin":true}]');
-        let found = users.find(u => u.username === username && u.password === password);
-        if (found) {
-          currentUser = { username: found.username, isAdmin: found.isAdmin };
-          localStorage.setItem('vtc_current_user', JSON.stringify(currentUser));
-          updateUIState();
-          switchView('home');
-        } else {
-          alert('Invalid username or password.');
-        }
-      }
-    }
-
-    function logout() {
-      currentUser = null;
-      localStorage.removeItem('vtc_current_user');
-      updateUIState();
-      switchView('home');
-    }
-
-    async function publishNews() {
-      if (!currentUser || !currentUser.isAdmin) {
-        alert('Unauthorized.');
-        return;
-      }
-
-      const title = document.getElementById('admin-title').value.trim();
-      const content = document.getElementById('admin-content').value.trim();
-      const image = document.getElementById('admin-image').value.trim();
-      const video = document.getElementById('admin-video').value.trim();
-      const audio = document.getElementById('admin-audio').value.trim();
-      const spoilerTitle = document.getElementById('admin-spoiler-title').value.trim();
-      const spoilerText = document.getElementById('admin-spoiler-text').value.trim();
-
-      if (!title || !content) {
-        alert('Headline title and content are required.');
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/news', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, content, image, video, audio, spoilerTitle, spoilerText, author: currentUser.username })
-        });
-        const data = await res.json();
-        if (data.success) {
-          alert('News article successfully published!');
-          document.getElementById('admin-title').value = '';
-          document.getElementById('admin-content').value = '';
-          document.getElementById('admin-image').value = '';
-          document.getElementById('admin-video').value = '';
-          document.getElementById('admin-audio').value = '';
-          document.getElementById('admin-spoiler-title').value = '';
-          document.getElementById('admin-spoiler-text').value = '';
-          switchView('news');
-        } else {
-          alert('Failed to publish article.');
-        }
-      } catch (err) {
-        // Fallback local storage news publishing
-        let news = JSON.parse(localStorage.getItem('vtc_local_news') || '[]');
-        news.unshift({ title, content, image, video, audio, spoilerTitle, spoilerText, author: currentUser.username, date: new Date().toLocaleDateString() });
-        localStorage.setItem('vtc_local_news', JSON.stringify(news));
-        alert('News article successfully published!');
-        switchView('news');
-      }
-    }
-
-    async function fetchNewsFeed() {
-      const feed = document.getElementById('news-feed-container');
-      try {
-        const res = await fetch('/api/news');
-        const news = await res.json();
-        renderArticles(news, feed);
-      } catch (e) {
-        // Fallback local news rendering
-        let news = JSON.parse(localStorage.getItem('vtc_local_news') || '[{"title":"Official Platform & Fleet Launch","content":"Welcome to Euro Logistics VTC portal!","author":"admin","date":"10/26/2026","image":"","video":"","audio":"","spoilerTitle":"","spoilerText":""}]');
-        renderArticles(news, feed);
-      }
-    }
-
-    function renderArticles(news, feedContainer) {
-      if (!news || news.length === 0) {
-        feedContainer.innerHTML = '<p style="color: var(--text-muted);">No news articles available.</p>';
-        return;
-      }
-
-      feedContainer.innerHTML = news.map(item => `
-        <div class="news-card">
-          <h2>${item.title}</h2>
-          <div class="news-meta">Posted by <strong>${item.author}</strong> on ${item.date}</div>
-          <div class="news-content">${item.content}</div>
-          
-          <div class="media-container">
-            ${item.image ? `<img src="${item.image}" alt="News Image">` : ''}
-            ${item.video ? `<video controls src="${item.video}"></video>` : ''}
-            ${item.audio ? `<audio controls src="${item.audio}"></audio>` : ''}
-          </div>
-
-          ${item.spoilerTitle && item.spoilerText ? `
-            <details>
-              <summary>🔒 Spoiler: ${item.spoilerTitle}</summary>
-              <p>${item.spoilerText}</p>
-            </details>
-          ` : ''}
-        </div>
-      `).join('');
-    }
-
-    async function fetchFleetStats() {
-      try {
-        const response = await fetch('/api/fleet-stats');
-        const data = await response.json();
-        document.getElementById('stat-status').innerHTML = `<span class="status-beacon"></span> ${data.status}`;
-        document.getElementById('stat-drivers').textContent = `${data.activeDrivers} Active`;
-        document.getElementById('stat-miles').textContent = `${data.totalMiles.toLocaleString()} mi`;
-      } catch (e) {
-        // Default static stats
-      }
-    }
-
-    updateUIState();
-    fetchFleetStats();
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
