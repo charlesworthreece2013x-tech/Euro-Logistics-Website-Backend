@@ -10,7 +10,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ActivityType
+  ActivityType,
+  ChannelType
 } = require('discord.js');
 
 // 1. Setup Express Web Server (Website, Root Static Files & Fleet Telemetry API)
@@ -73,6 +74,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('setup-counting')
     .setDescription('Set the current channel as the official Counting channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder()
+    .setName('setup-support')
+    .setDescription('Post the official Euro Logistics ticket support panel')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('leaderboard')
@@ -303,7 +308,32 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ This channel has been successfully set up as the **Counting Game** channel! Start with **1**.` });
   }
 
-  // C. Execute /leaderboard
+  // C. Execute /setup-support (Support Ticket Panel)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'setup-support') {
+    const SUPPORT_PANEL_CHANNEL_ID = '1564236425526775810';
+    const targetChannel = await interaction.guild.channels.fetch(SUPPORT_PANEL_CHANNEL_ID).catch(() => interaction.channel);
+
+    const supportEmbed = {
+      color: 0x53B7ED,
+      title: '🎫 Euro Logistics • Support Desk',
+      description: 'Need assistance with your driver application, telemetry, convoys, or community questions? \n\nClick the **Create Ticket** button below to open a private support channel with our management team.',
+      footer: { text: 'Euro Logistics VTC • Ticket Support System' },
+      timestamp: new Date().toISOString()
+    };
+
+    const ticketBtn = new ButtonBuilder()
+      .setCustomId('create_support_ticket')
+      .setLabel('Create Ticket')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('🎫');
+
+    const row = new ActionRowBuilder().addComponents(ticketBtn);
+
+    await targetChannel.send({ embeds: [supportEmbed], components: [row] });
+    await interaction.reply({ content: `✅ Support ticket panel successfully posted to <#${targetChannel.id}>!`, ephemeral: true });
+  }
+
+  // D. Execute /leaderboard
   if (interaction.isChatInputCommand() && interaction.commandName === 'leaderboard') {
     await interaction.deferReply();
 
@@ -341,7 +371,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // D. Execute /fleet-status
+  // E. Execute /fleet-status
   if (interaction.isChatInputCommand() && interaction.commandName === 'fleet-status') {
     await interaction.deferReply();
 
@@ -369,7 +399,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // E. Execute /bot-status (Restricted to #status channel)
+  // F. Execute /bot-status (Restricted to #status channel)
   if (interaction.isChatInputCommand() && interaction.commandName === 'bot-status') {
     const ALLOWED_CHANNEL_ID = '1564280861787033681'; 
 
@@ -401,7 +431,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [statusEmbed] });
   }
 
-  // F. Execute /post-status (Professional Incident / Maintenance Embed)
+  // G. Execute /post-status (Professional Incident / Maintenance Embed)
   if (interaction.isChatInputCommand() && interaction.commandName === 'post-status') {
     const title = interaction.options.getString('title');
     const state = interaction.options.getString('state');
@@ -436,7 +466,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ Professional status update posted successfully to <#${TARGET_CHANNEL_ID}>!`, ephemeral: true });
   }
 
-  // G. Execute /clear
+  // H. Execute /clear
   if (interaction.isChatInputCommand() && interaction.commandName === 'clear') {
     const amount = interaction.options.getInteger('amount');
 
@@ -459,7 +489,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // H. Handle Dual-Role "Verify" Button Click
+  // I. Handle Dual-Role "Verify" Button Click
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
@@ -488,6 +518,87 @@ client.on('interactionCreate', async interaction => {
         ephemeral: true
       });
     }
+  }
+
+  // J. Handle Support Ticket Creation ("Create Ticket" Button)
+  if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
+    await interaction.deferReply({ ephemeral: true });
+
+    const guild = interaction.guild;
+    const user = interaction.user;
+
+    try {
+      // Check if user already has an open ticket channel
+      const existingChannel = guild.channels.cache.find(
+        c => c.name === `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`
+      );
+
+      if (existingChannel) {
+        return await interaction.editReply({
+          content: `❌ You already have an open support ticket: <#${existingChannel.id}>`
+        });
+      }
+
+      // Create a private channel for the user
+      const ticketChannel = await guild.channels.create({
+        name: `ticket-${user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: guild.id, // @everyone role denied
+            deny: [PermissionFlagsBits.ViewChannel]
+          },
+          {
+            id: user.id, // User allowed
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
+          },
+          {
+            id: client.user.id, // Bot allowed
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels]
+          }
+        ]
+      });
+
+      const ticketEmbed = {
+        color: 0x53B7ED,
+        title: `🎫 Support Ticket — ${user.username}`,
+        description: `Hello ${user}, welcome to your support ticket!\n\nPlease describe your issue, question, or inquiry in detail. Our management and support staff will be with you shortly.\n\nWhen your issue is resolved, click the **Close Ticket** button below.`,
+        footer: { text: 'Euro Logistics VTC • Support System' },
+        timestamp: new Date().toISOString()
+      };
+
+      const closeBtn = new ButtonBuilder()
+        .setCustomId('close_support_ticket')
+        .setLabel('Close Ticket')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('🔒');
+
+      const row = new ActionRowBuilder().addComponents(closeBtn);
+
+      await ticketChannel.send({ content: `${user}`, embeds: [ticketEmbed], components: [row] });
+
+      await interaction.editReply({
+        content: `✅ Your support ticket has been created: <#${ticketChannel.id}>`
+      });
+    } catch (error) {
+      console.error('Error creating support ticket channel:', error);
+      await interaction.editReply({
+        content: '❌ Failed to create support ticket channel. Please check bot permissions (Manage Channels).'
+      });
+    }
+  }
+
+  // K. Handle Support Ticket Closure ("Close Ticket" Button)
+  if (interaction.isButton() && interaction.customId === 'close_support_ticket') {
+    await interaction.reply({ content: '🔒 Closing ticket and deleting channel in 5 seconds...', ephemeral: false });
+
+    setTimeout(async () => {
+      try {
+        await interaction.channel.delete();
+      } catch (error) {
+        console.error('Error deleting ticket channel:', error);
+      }
+    }, 5000);
   }
 });
 
