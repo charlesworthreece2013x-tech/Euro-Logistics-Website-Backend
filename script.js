@@ -9,7 +9,7 @@ async function fetchNodeStats() {
     const data = await response.json();
     renderFleetData(data);
   } catch (err) {
-    // Fallback data if backend is offline
+    // Fallback data if backend is asleep or offline
     renderFleetData({
       status: "ONLINE",
       activeDrivers: 3,
@@ -85,6 +85,6 @@ function toggleAccordion(button) {
   }
 }
 
-// Initial fetch and poll backend every 1 second
+// Poll backend every 1 second (1000 ms)
 fetchNodeStats();
 setInterval(fetchNodeStats, 1000);
