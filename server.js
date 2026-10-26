@@ -293,14 +293,13 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // E. Execute /bot-status (Restricted to a specific channel)
+  // E. Execute /bot-status (Restricted to #status channel)
   if (interaction.isChatInputCommand() && interaction.commandName === 'bot-status') {
-    // REPLACE WITH YOUR TARGET CHANNEL ID (Right-click your designated channel -> Copy Channel ID)
-    const ALLOWED_CHANNEL_ID = 'YOUR_CHANNEL_ID_HERE'; 
+    const ALLOWED_CHANNEL_ID = '1564280861787033681'; 
 
     if (interaction.channelId !== ALLOWED_CHANNEL_ID) {
       return interaction.reply({ 
-        content: `❌ This command can only be used in <#${1564280861787033681}>!`, 
+        content: `❌ This command can only be used in <#${ALLOWED_CHANNEL_ID}>!`, 
         ephemeral: true 
       });
     }
