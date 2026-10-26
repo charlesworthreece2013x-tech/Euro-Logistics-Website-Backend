@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 10000;
 // Serve static frontend files (HTML, CSS, JS, images) directly from the root folder
 app.use(express.static(path.join(__dirname)));
 
-// Telemetry API endpoint for live fleet stats (Updated with your in-game profile 'transit')
+// Telemetry API endpoint for live fleet stats (Configured for 'transit')
 app.get('/api/fleet-stats', (req, res) => {
   res.json({
     status: "ONLINE",
