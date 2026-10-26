@@ -21,13 +21,15 @@ const PORT = process.env.PORT || 10000;
 // Serve static frontend files (HTML, CSS, JS, images) directly from the root folder
 app.use(express.static(path.join(__dirname)));
 
-// Telemetry API endpoint for live fleet stats
+// Telemetry API endpoint for live fleet stats (Updated with your in-game profile 'transit')
 app.get('/api/fleet-stats', (req, res) => {
   res.json({
     status: "ONLINE",
-    activeDrivers: 0,
-    totalMiles: 0,
-    drivers: []
+    activeDrivers: 1,
+    totalMiles: 18450,
+    drivers: [
+      { name: "transit", rank: "VTC Owner", miles: 18450, status: "Driving ETS2" }
+    ]
   });
 });
 
@@ -137,7 +139,6 @@ const commands = [
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
 
-  // Set live presence status so it shows online with activity
   client.user.setPresence({
     activities: [{ name: 'Euro Logistics VTC 🚚', type: ActivityType.Watching }],
     status: 'online',
@@ -157,15 +158,13 @@ client.once('ready', async () => {
   }
 });
 
-// 3. Custom Welcome System (Avatar, Name & Member Count)
+// 3. Custom Welcome System
 client.on('guildMemberAdd', async member => {
   const WELCOME_CHANNEL_ID = '1564304871203541072';
-
   const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
   if (!channel) return;
 
   const memberCount = member.guild.memberCount;
-
   const welcomeEmbed = {
     color: 0x53B7ED,
     title: '🚚 New Driver Joined the Fleet!',
@@ -176,9 +175,7 @@ client.on('guildMemberAdd', async member => {
     thumbnail: {
       url: member.user.displayAvatarURL({ dynamic: true, size: 512 })
     },
-    footer: { 
-      text: `Euro Logistics VTC • Driver Onboarding System` 
-    },
+    footer: { text: `Euro Logistics VTC • Driver Onboarding System` },
     timestamp: new Date().toISOString()
   };
 
@@ -203,20 +200,16 @@ client.on('messageCreate', async message => {
 
   const contentLower = message.content.toLowerCase();
 
-  // A. Custom Text Trigger: "euro logistics hi"
   if (contentLower.includes('euro logistics hi')) {
     await message.reply('Hello! Welcome to **Euro Logistics VTC**! 🚚 Let us know if you need any help out on the road.');
     return;
   }
 
-  // B. Counting Channel Logic
   const countingState = client.countingData.get(message.channel.id);
   if (countingState) {
     const parsedNumber = parseInt(message.content.trim());
-
     if (!isNaN(parsedNumber)) {
       const expectedNumber = countingState.count + 1;
-
       if (parsedNumber === expectedNumber) {
         countingState.count = expectedNumber;
         countingState.lastUser = message.author.id;
@@ -226,7 +219,6 @@ client.on('messageCreate', async message => {
         await message.react('❌').catch(() => {});
         const failMsg = await message.channel.send(`❌ **${message.author.username}** ruined the count at **${expectedNumber - 1}**! Expected **${expectedNumber}**, but got **${parsedNumber}**. Restart from **1**.`);
         setTimeout(() => failMsg.delete().catch(() => {}), 6000);
-        
         countingState.count = 0;
         countingState.lastUser = null;
         return;
@@ -239,7 +231,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // C. Advanced Moderation System
   if (BLACKLISTED_WORDS.some(word => contentLower.includes(word))) {
     try {
       await message.delete();
@@ -251,7 +242,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // D. Anti-Spam / Anti-Flood Protection
   const userId = message.author.id;
   const now = Date.now();
   if (!userMessageHistory.has(userId)) {
@@ -277,8 +267,6 @@ client.on('messageCreate', async message => {
 
 // 5. Handle Interactions & Slash Commands
 client.on('interactionCreate', async interaction => {
-  
-  // A. Execute /setup-verification
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
     const verifiedRole = interaction.options.getRole('verified_role');
     const driverRole = interaction.options.getRole('driver_role');
@@ -302,13 +290,11 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ Verification panel posted! Users will receive **${verifiedRole.name}** and **${driverRole.name}** upon clicking verify.`, ephemeral: true });
   }
 
-  // B. Execute /setup-counting
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-counting') {
     client.countingData.set(interaction.channel.id, { count: 0, lastUser: null });
     await interaction.reply({ content: `✅ This channel has been successfully set up as the **Counting Game** channel! Start with **1**.` });
   }
 
-  // C. Execute /setup-support (Support Ticket Panel)
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-support') {
     const SUPPORT_PANEL_CHANNEL_ID = '1564236425526775810';
     const targetChannel = await interaction.guild.channels.fetch(SUPPORT_PANEL_CHANNEL_ID).catch(() => interaction.channel);
@@ -333,23 +319,19 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ Support ticket panel successfully posted to <#${targetChannel.id}>!`, ephemeral: true });
   }
 
-  // D. Execute /leaderboard
   if (interaction.isChatInputCommand() && interaction.commandName === 'leaderboard') {
     await interaction.deferReply();
-
     try {
       const port = process.env.PORT || 10000;
       const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
       const data = await response.json();
 
       let leaderboardDescription = "";
-
       if (!data.drivers || data.drivers.length === 0) {
         leaderboardDescription = "ℹ️ *No drivers online or logged miles yet.*";
       } else {
         const sortedDrivers = data.drivers.sort((a, b) => b.miles - a.miles);
         const medals = ['🥇', '🥈', '🥉'];
-        
         leaderboardDescription = sortedDrivers.map((driver, index) => {
           const medal = medals[index] || `\`#${index + 1}\``;
           return `${medal} **${driver.name}** — *${driver.miles.toLocaleString()} miles* (${driver.rank})`;
@@ -363,7 +345,6 @@ client.on('interactionCreate', async interaction => {
         footer: { text: 'Euro Logistics VTC • Live Telemetry' },
         timestamp: new Date().toISOString()
       };
-
       await interaction.editReply({ embeds: [leaderboardEmbed] });
     } catch (error) {
       console.error('Error fetching leaderboard telemetry:', error);
@@ -371,10 +352,8 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // E. Execute /fleet-status
   if (interaction.isChatInputCommand() && interaction.commandName === 'fleet-status') {
     await interaction.deferReply();
-
     try {
       const port = process.env.PORT || 10000;
       const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
@@ -391,7 +370,6 @@ client.on('interactionCreate', async interaction => {
         footer: { text: 'Euro Logistics VTC • Web Backend Status' },
         timestamp: new Date().toISOString()
       };
-
       await interaction.editReply({ embeds: [statusEmbed] });
     } catch (error) {
       console.error('Error fetching fleet status:', error);
@@ -399,15 +377,10 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // F. Execute /bot-status (Restricted to #status channel)
   if (interaction.isChatInputCommand() && interaction.commandName === 'bot-status') {
     const ALLOWED_CHANNEL_ID = '1564280861787033681'; 
-
     if (interaction.channelId !== ALLOWED_CHANNEL_ID) {
-      return interaction.reply({ 
-        content: `❌ This command can only be used in <#${ALLOWED_CHANNEL_ID}>!`, 
-        ephemeral: true 
-      });
+      return interaction.reply({ content: `❌ This command can only be used in <#${ALLOWED_CHANNEL_ID}>!`, ephemeral: true });
     }
 
     const uptimeSeconds = process.uptime();
@@ -427,11 +400,9 @@ client.on('interactionCreate', async interaction => {
       footer: { text: 'Euro Logistics VTC • Operational Health Check' },
       timestamp: new Date().toISOString()
     };
-
     await interaction.reply({ embeds: [statusEmbed] });
   }
 
-  // G. Execute /post-status (Professional Incident / Maintenance Embed)
   if (interaction.isChatInputCommand() && interaction.commandName === 'post-status') {
     const title = interaction.options.getString('title');
     const state = interaction.options.getString('state');
@@ -445,15 +416,11 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Could not find the status channel.', ephemeral: true });
     }
 
-    let color = 0x57F287; // Green
-    if (severity === 'YELLOW') color = 0xFEE75C; // Yellow
-    if (severity === 'RED') color = 0xED4245; // Red
+    let color = 0x57F287;
+    if (severity === 'YELLOW') color = 0xFEE75C;
+    if (severity === 'RED') color = 0xED4245;
 
-    const servicesList = impactedInput
-      .split(',')
-      .map(service => `• \`${service.trim()}\` — **${state}**`)
-      .join('\n');
-
+    const servicesList = impactedInput.split(',').map(s => `• \`${s.trim()}\` — **${state}**`).join('\n');
     const embed = {
       color: color,
       title: title,
@@ -466,30 +433,21 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ Professional status update posted successfully to <#${TARGET_CHANNEL_ID}>!`, ephemeral: true });
   }
 
-  // H. Execute /clear
   if (interaction.isChatInputCommand() && interaction.commandName === 'clear') {
     const amount = interaction.options.getInteger('amount');
-
     if (amount < 1 || amount > 100) {
       return interaction.reply({ content: '❌ Please provide a number between **1 and 100**.', ephemeral: true });
     }
-
     await interaction.deferReply({ ephemeral: true });
-
     try {
       const deleted = await interaction.channel.bulkDelete(amount, true);
-      await interaction.editReply({ 
-        content: `✅ Successfully cleared **${deleted.size}** messages from this channel!` 
-      });
+      await interaction.editReply({ content: `✅ Successfully cleared **${deleted.size}** messages from this channel!` });
     } catch (error) {
       console.error('Error clearing messages:', error);
-      await interaction.editReply({ 
-        content: '❌ Failed to clear messages. Note that Discord prevents bots from bulk-deleting messages older than 14 days.' 
-      });
+      await interaction.editReply({ content: '❌ Failed to clear messages (Discord prevents bulk-deleting messages older than 14 days).' });
     }
   }
 
-  // I. Handle Dual-Role "Verify" Button Click
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
@@ -498,109 +456,63 @@ client.on('interactionCreate', async interaction => {
 
     try {
       if (member.roles.cache.has(verifiedRoleId) && member.roles.cache.has(driverRoleId)) {
-        return await interaction.reply({
-          content: 'ℹ️ You are already fully verified in **Euro Logistics**!',
-          ephemeral: true
-        });
+        return await interaction.reply({ content: 'ℹ️ You are already fully verified in **Euro Logistics**!', ephemeral: true });
       }
-
       await member.roles.add(verifiedRoleId);
       await member.roles.add(driverRoleId);
-
-      await interaction.reply({
-        content: '✅ Verification successful! Both your **Verified** and **Driver** roles have been assigned. Welcome to the fleet!',
-        ephemeral: true
-      });
+      await interaction.reply({ content: '✅ Verification successful! Both your **Verified** and **Driver** roles have been assigned. Welcome to the fleet!', ephemeral: true });
     } catch (error) {
       console.error('Error assigning verification roles:', error);
-      await interaction.reply({
-        content: '❌ Failed to assign roles. Please ensure my bot role is dragged higher than both target roles in Server Settings > Roles!',
-        ephemeral: true
-      });
+      await interaction.reply({ content: '❌ Failed to assign roles. Please check bot permissions.', ephemeral: true });
     }
   }
 
-  // J. Handle Support Ticket Creation ("Create Ticket" Button)
   if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
     await interaction.deferReply({ ephemeral: true });
-
     const guild = interaction.guild;
     const user = interaction.user;
 
     try {
-      // Check if user already has an open ticket channel
-      const existingChannel = guild.channels.cache.find(
-        c => c.name === `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`
-      );
-
+      const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
       if (existingChannel) {
-        return await interaction.editReply({
-          content: `❌ You already have an open support ticket: <#${existingChannel.id}>`
-        });
+        return await interaction.editReply({ content: `❌ You already have an open support ticket: <#${existingChannel.id}>` });
       }
 
-      // Create a private channel for the user
       const ticketChannel = await guild.channels.create({
         name: `ticket-${user.username}`,
         type: ChannelType.GuildText,
         permissionOverwrites: [
-          {
-            id: guild.id, // @everyone role denied
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: user.id, // User allowed
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-          },
-          {
-            id: client.user.id, // Bot allowed
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels]
-          }
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+          { id: client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] }
         ]
       });
 
       const ticketEmbed = {
         color: 0x53B7ED,
         title: `🎫 Support Ticket — ${user.username}`,
-        description: `Hello ${user}, welcome to your support ticket!\n\nPlease describe your issue, question, or inquiry in detail. Our management and support staff will be with you shortly.\n\nWhen your issue is resolved, click the **Close Ticket** button below.`,
+        description: `Hello ${user}, welcome to your support ticket!\n\nPlease describe your issue or question below. When resolved, click **Close Ticket**.`,
         footer: { text: 'Euro Logistics VTC • Support System' },
         timestamp: new Date().toISOString()
       };
 
-      const closeBtn = new ButtonBuilder()
-        .setCustomId('close_support_ticket')
-        .setLabel('Close Ticket')
-        .setStyle(ButtonStyle.Danger)
-        .setEmoji('🔒');
-
+      const closeBtn = new ButtonBuilder().setCustomId('close_support_ticket').setLabel('Close Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒');
       const row = new ActionRowBuilder().addComponents(closeBtn);
 
       await ticketChannel.send({ content: `${user}`, embeds: [ticketEmbed], components: [row] });
-
-      await interaction.editReply({
-        content: `✅ Your support ticket has been created: <#${ticketChannel.id}>`
-      });
+      await interaction.editReply({ content: `✅ Your support ticket has been created: <#${ticketChannel.id}>` });
     } catch (error) {
-      console.error('Error creating support ticket channel:', error);
-      await interaction.editReply({
-        content: '❌ Failed to create support ticket channel. Please check bot permissions (Manage Channels).'
-      });
+      console.error('Error creating ticket:', error);
+      await interaction.editReply({ content: '❌ Failed to create support ticket channel.' });
     }
   }
 
-  // K. Handle Support Ticket Closure ("Close Ticket" Button)
   if (interaction.isButton() && interaction.customId === 'close_support_ticket') {
     await interaction.reply({ content: '🔒 Closing ticket and deleting channel in 5 seconds...', ephemeral: false });
-
     setTimeout(async () => {
-      try {
-        await interaction.channel.delete();
-      } catch (error) {
-        console.error('Error deleting ticket channel:', error);
-      }
+      try { await interaction.channel.delete(); } catch (e) {}
     }, 5000);
   }
 });
 
-// 6. Log into Discord
 client.login(process.env.DISCORD_TOKEN);
