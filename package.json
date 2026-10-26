@@ -1,12 +1,13 @@
 {
-  "name": "euro-logistics-vtc",
+  "name": "euro-logistics-backend",
   "version": "1.0.0",
+  "description": "Euro Logistics Telemetry & Discord Bot Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "discord.js": "^14.14.1",
+    "express": "^4.18.2"
   }
 }
