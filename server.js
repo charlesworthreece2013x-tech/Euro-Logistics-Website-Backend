@@ -44,7 +44,7 @@ app.listen(PORT, () => {
   console.log(`Euro Logistics server running on port ${PORT}`);
 });
 
-// 2. Setup Discord Bot Client
+// 2. Setup Discord Bot Client (With GuildMembers intent required for welcoming)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -152,7 +152,39 @@ client.once('ready', async () => {
   }
 });
 
-// 3. Systems Memory & Advanced Moderation Filters
+// 3. Custom Welcome System (Avatar, Name & Member Count)
+client.on('guildMemberAdd', async member => {
+  const WELCOME_CHANNEL_ID = '1564280861787033681'; // Uses your status/welcome channel ID
+
+  const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel) return;
+
+  const memberCount = member.guild.memberCount;
+
+  const welcomeEmbed = {
+    color: 0x53B7ED,
+    title: '🚚 New Driver Joined the Fleet!',
+    description: `Welcome to **Euro Logistics VTC**, ${member}! We're thrilled to have you on the road with us.\n\n` +
+                 `• **Driver Profile:** \`${member.user.tag}\`\n` +
+                 `• **Fleet Population:** You are our **#${memberCount}** member!\n\n` +
+                 `*Make sure to check out our verification and rules channels to get started.*`,
+    thumbnail: {
+      url: member.user.displayAvatarURL({ dynamic: true, size: 512 })
+    },
+    footer: { 
+      text: `Euro Logistics VTC • Driver Onboarding System` 
+    },
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    await channel.send({ content: `${member}`, embeds: [welcomeEmbed] });
+  } catch (error) {
+    console.error('Error sending welcome message:', error);
+  }
+});
+
+// 4. Systems Memory & Advanced Moderation Filters
 client.countingData = new Map();
 const userMessageHistory = new Map();
 
@@ -238,7 +270,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// 4. Handle Interactions & Slash Commands
+// 5. Handle Interactions & Slash Commands
 client.on('interactionCreate', async interaction => {
   
   // A. Execute /setup-verification
@@ -459,5 +491,5 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// 5. Log into Discord
+// 6. Log into Discord
 client.login(process.env.DISCORD_TOKEN);
