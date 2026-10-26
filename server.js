@@ -293,8 +293,18 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // E. Execute /bot-status
+  // E. Execute /bot-status (Restricted to a specific channel)
   if (interaction.isChatInputCommand() && interaction.commandName === 'bot-status') {
+    // REPLACE WITH YOUR TARGET CHANNEL ID (Right-click your designated channel -> Copy Channel ID)
+    const ALLOWED_CHANNEL_ID = 'YOUR_CHANNEL_ID_HERE'; 
+
+    if (interaction.channelId !== ALLOWED_CHANNEL_ID) {
+      return interaction.reply({ 
+        content: `❌ This command can only be used in <#${ALLOWED_CHANNEL_ID}>!`, 
+        ephemeral: true 
+      });
+    }
+
     const uptimeSeconds = process.uptime();
     const hours = Math.floor(uptimeSeconds / 3600);
     const minutes = Math.floor((uptimeSeconds % 3600) / 60);
