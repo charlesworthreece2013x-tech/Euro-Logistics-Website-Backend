@@ -42,37 +42,31 @@ const client = new Client({
   ]
 });
 
-// Define the /news slash command with optional media attachment & spoiler toggle
+// Define the /news slash command
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
-    .setDescription('Open the News Dashboard to create an announcement')
+    .setDescription('Open the Euro Logistics News Dashboard')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addAttachmentOption(option =>
-      option.setName('media')
-        .setDescription('Optional image, video, or sound file to include')
-        .setRequired(false)
-    )
-    .addBooleanOption(option =>
-      option.setName('spoiler')
-        .setDescription('Mark attached media/video as a spoiler? (True/False)')
-        .setRequired(false)
-    )
 ];
 
-// Register slash command directly to your server ID for instant access
+// Register slash command cleanly (clearing globals, setting server-specific)
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
   try {
-    console.log('Registering News Dashboard slash command...');
+    console.log('Cleaning up old global commands...');
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+
+    console.log('Registering Truckline-style News Dashboard command...');
     await rest.put(
       Routes.applicationGuildCommands(client.user.id, '1564236424155373568'),
       { body: commands }
     );
-    console.log('Successfully registered /news command for your server!');
+    
+    console.log('Successfully registered /news dashboard command!');
   } catch (error) {
     console.error('Error registering slash command:', error);
   }
@@ -81,99 +75,69 @@ client.once('ready', async () => {
 // 3. Handle Interactions (/news trigger & Modal Dashboard submission)
 client.on('interactionCreate', async interaction => {
   
-  // A. Handle /news command execution -> Opens Modal Dashboard
+  // A. Handle /news command -> Opens the Truckline-style Modal Form
   if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
-    const attachment = interaction.options.getAttachment('media');
-    const isSpoiler = interaction.options.getBoolean('spoiler') || false;
-
-    // Store attachment info temporarily if media was attached
-    if (attachment) {
-      client.pendingNewsMedia = client.pendingNewsMedia || new Map();
-      client.pendingNewsMedia.set(interaction.user.id, {
-        url: attachment.url,
-        name: attachment.name,
-        contentType: attachment.contentType,
-        spoiler: isSpoiler
-      });
-    }
-
-    // Build the Dashboard Form (Modal)
     const modal = new ModalBuilder()
-      .setCustomId('news_dashboard_modal')
+      .setCustomId('truckline_news_modal')
       .setTitle('🚚 Euro Logistics News Dashboard');
 
+    // Title Input (mirrors TrucklineMP Title box)
     const titleInput = new TextInputBuilder()
       .setCustomId('news_title')
-      .setLabel('Announcement Title')
+      .setLabel('Title')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('e.g., Weekly Convoy Update / Fleet Expansion!')
+      .setPlaceholder('What is this update about?')
       .setRequired(true)
-      .setMaxLength(256);
+      .setMaxLength(200);
 
-    const descInput = new TextInputBuilder()
-      .setCustomId('news_description')
-      .setLabel('News Description / Details')
+    // Cover Image URL Input (mirrors TrucklineMP Cover image field)
+    const coverImageInput = new TextInputBuilder()
+      .setCustomId('news_cover_image')
+      .setLabel('Cover Image (Optional HTTPS Link)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('https://')
+      .setRequired(false);
+
+    // Post / Description Body (mirrors TrucklineMP Post markdown box)
+    const postInput = new TextInputBuilder()
+      .setCustomId('news_post')
+      .setLabel('Post Content / Markdown')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter full news details here...')
+      .setPlaceholder('Write your update. Markdown works here...')
       .setRequired(true)
       .setMaxLength(4000);
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(descInput)
+      new ActionRowBuilder().addComponents(coverImageInput),
+      new ActionRowBuilder().addComponents(postInput)
     );
 
     await interaction.showModal(modal);
   }
 
-  // B. Handle Modal Form Submission
-  if (interaction.isModalSubmit() && interaction.customId === 'news_dashboard_modal') {
+  // B. Handle Modal Form Submission & Publish Embed
+  if (interaction.isModalSubmit() && interaction.customId === 'truckline_news_modal') {
     const title = interaction.fields.getTextInputValue('news_title');
-    const description = interaction.fields.getTextInputValue('news_description');
-
-    // Retrieve pending media attached during /news execution
-    const media = client.pendingNewsMedia?.get(interaction.user.id);
+    const coverImage = interaction.fields.getTextInputValue('news_cover_image');
+    const postContent = interaction.fields.getTextInputValue('news_post');
 
     const newsEmbed = {
       color: 0x53B7ED, // Euro Logistics Blue Theme
       title: `🚚 ${title}`,
-      description: description,
+      description: postContent,
       footer: {
-        text: `Published by ${interaction.user.tag}`,
+        text: `Published by ${interaction.user.tag} • Euro Logistics VTC`,
       },
       timestamp: new Date().toISOString()
     };
 
-    // Process attached media & spoilers
-    if (media) {
-      const isImage = media.contentType?.startsWith('image/');
-      
-      if (isImage && !media.spoiler) {
-        // Embed image directly into the embed card
-        newsEmbed.image = { url: media.url };
-        await interaction.reply({ embeds: [newsEmbed] });
-      } else {
-        // Handle videos, audio, or media marked as spoiler
-        const attachmentFile = new AttachmentBuilder(media.url, { 
-          name: media.name 
-        });
-
-        if (media.spoiler) {
-          attachmentFile.setSpoiler(true);
-        }
-
-        await interaction.reply({
-          embeds: [newsEmbed],
-          files: [attachmentFile]
-        });
-      }
-
-      // Clear cached attachment memory
-      client.pendingNewsMedia.delete(interaction.user.id);
-    } else {
-      // Text-only news submission
-      await interaction.reply({ embeds: [newsEmbed] });
+    // Attach cover image if a valid URL was provided
+    if (coverImage && coverImage.startsWith('http')) {
+      newsEmbed.image = { url: coverImage };
     }
+
+    await interaction.reply({ embeds: [newsEmbed] });
   }
 });
 
