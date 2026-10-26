@@ -74,6 +74,25 @@ const commands = [
     .setName('bot-status')
     .setDescription('Check if the Discord bot and web backend are online and responding'),
   new SlashCommandBuilder()
+    .setName('post-status')
+    .setDescription('Manually post a custom system status update to the status channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(option =>
+      option.setName('status_type')
+        .setDescription('Is it operational, maintenance, or an outage?')
+        .setRequired(true)
+        .addChoices(
+          { name: '🟢 Operational / Recovered', value: 'GREEN' },
+          { name: '🟡 Maintenance / Degraded', value: 'YELLOW' },
+          { name: '🔴 Outage / Down', value: 'RED' }
+        )
+    )
+    .addStringOption(option =>
+      option.setName('details')
+        .setDescription('Describe what is happening or what service is affected')
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
     .setName('clear')
     .setDescription('Bulk delete a specified number of messages from the channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
@@ -84,11 +103,7 @@ const commands = [
     )
 ];
 
-// Track system status states to prevent flooding
-let lastKnownApiStatus = "ONLINE";
-const STATUS_CHANNEL_ID = '1564280861787033681';
-
-// Register slash commands, set online presence, and start background status monitor
+// Register slash commands and set online presence on startup
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
 
@@ -110,58 +125,6 @@ client.once('ready', async () => {
   } catch (error) {
     console.error('Error registering slash commands:', error);
   }
-
-  // Background Health Monitor (Runs every 5 minutes)
-  setInterval(async () => {
-    try {
-      const port = process.env.PORT || 10000;
-      const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
-      const data = await response.json();
-
-      if (data.status !== lastKnownApiStatus) {
-        lastKnownApiStatus = data.status;
-        const channel = await client.channels.fetch(STATUS_CHANNEL_ID).catch(() => null);
-        
-        if (channel) {
-          if (data.status === "ONLINE") {
-            await channel.send({
-              embeds: [{
-                color: 0x57F287,
-                title: '🟢 System Recovery Alert',
-                description: 'The web backend and telemetry APIs have recovered and are fully operational.',
-                timestamp: new Date().toISOString()
-              }]
-            });
-          } else {
-            await channel.send({
-              embeds: [{
-                color: 0xED4245,
-                title: '🔴 System Outage Alert',
-                description: 'Warning: The web backend or fleet telemetry API is currently experiencing issues or is down.',
-                timestamp: new Date().toISOString()
-              }]
-            });
-          }
-        }
-      }
-    } catch (error) {
-      // If internal check fails completely
-      if (lastKnownApiStatus !== "DOWN") {
-        lastKnownApiStatus = "DOWN";
-        const channel = await client.channels.fetch(STATUS_CHANNEL_ID).catch(() => null);
-        if (channel) {
-          await channel.send({
-            embeds: [{
-              color: 0xED4245,
-              title: '🔴 Critical Outage Alert',
-              description: 'The bot failed to communicate with the web backend/telemetry API. Services may be offline.',
-              timestamp: new Date().toISOString()
-            }]
-          });
-        }
-      }
-    }
-  }, 5 * 60 * 1000); // Checks every 5 minutes
 });
 
 // 3. Systems Memory & Advanced Moderation Filters
@@ -381,7 +344,43 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [statusEmbed] });
   }
 
-  // F. Execute /clear
+  // F. Execute /post-status (Manual staff status broadcasts)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'post-status') {
+    const statusType = interaction.options.getString('status_type');
+    const details = interaction.options.getString('details');
+    const TARGET_CHANNEL_ID = '1564280861787033681';
+
+    const channel = await client.channels.fetch(TARGET_CHANNEL_ID).catch(() => null);
+    if (!channel) {
+      return interaction.reply({ content: '❌ Could not find the status channel.', ephemeral: true });
+    }
+
+    let color = 0x57F287; // Green
+    let title = '🟢 Euro Logistics • System Operational';
+
+    if (statusType === 'YELLOW') {
+      color = 0xFEE75C; // Yellow
+      title = '🟡 Euro Logistics • Maintenance / Degraded Performance';
+    } else if (statusType === 'RED') {
+      color = 0xED4245; // Red
+      title = '🔴 Euro Logistics • System Outage Alert';
+    }
+
+    const embed = {
+      color: color,
+      title: title,
+      description: details,
+      fields: [
+        { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true }
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    await channel.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Successfully posted the status update to <#${TARGET_CHANNEL_ID}>!`, ephemeral: true });
+  }
+
+  // G. Execute /clear
   if (interaction.isChatInputCommand() && interaction.commandName === 'clear') {
     const amount = interaction.options.getInteger('amount');
 
@@ -404,7 +403,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // G. Handle Dual-Role "Verify" Button Click
+  // H. Handle Dual-Role "Verify" Button Click
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
