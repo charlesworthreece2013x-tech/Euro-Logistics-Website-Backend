@@ -1,5 +1,17 @@
 const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder, 
+  PermissionFlagsBits,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  AttachmentBuilder
+} = require('discord.js');
 
 // 1. Setup Express Web Server (for website telemetry & Render health checks)
 const app = express();
@@ -26,56 +38,142 @@ app.listen(PORT, () => {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.GuildMessages
   ]
 });
 
-client.once('ready', () => {
+// Define the /news slash command with optional attachment & spoiler toggle
+const commands = [
+  new SlashCommandBuilder()
+    .setName('news')
+    .setDescription('Open the News Dashboard to create an announcement')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addAttachmentOption(option =>
+      option.setName('media')
+        .setDescription('Optional image, video, or sound file to include')
+        .setRequired(false)
+    )
+    .addBooleanOption(option =>
+      option.setName('spoiler')
+        .setDescription('Mark attached media/video as a spoiler? (True/False)')
+        .setRequired(false)
+    )
+];
+
+// Register slash command with Discord API on startup
+client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
-});
 
-// 3. News Command Handler
-client.on('messageCreate', async message => {
-  if (message.author.bot || !message.content.startsWith('!news')) return;
-
-  if (!message.member.permissions.has('Administrator')) {
-    return message.reply('You do not have permission to use the news command.');
-  }
-
-  const newsContent = message.content.slice(5).trim();
-  const attachment = message.attachments.first();
-
-  if (!newsContent && !attachment) {
-    return message.reply('Please provide news text or attach a file. Example: `!news Convoy details attached!`');
-  }
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
   try {
-    await message.delete();
-  } catch (err) {
-    console.error('Failed to delete command message:', err);
+    console.log('Registering News Dashboard slash command...');
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    console.log('Successfully registered /news command!');
+  } catch (error) {
+    console.error('Error registering slash command:', error);
+  }
+});
+
+// 3. Handle Interactions (/news & Modal Dashboard submission)
+client.on('interactionCreate', async interaction => {
+  
+  // A. Handle /news command trigger -> Opens Modal Dashboard
+  if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
+    const attachment = interaction.options.getAttachment('media');
+    const isSpoiler = interaction.options.getBoolean('spoiler') || false;
+
+    // Store attachment info temporarily on the client instance if attached
+    if (attachment) {
+      client.pendingNewsMedia = client.pendingNewsMedia || new Map();
+      client.pendingNewsMedia.set(interaction.user.id, {
+        url: attachment.url,
+        name: attachment.name,
+        contentType: attachment.contentType,
+        spoiler: isSpoiler
+      });
+    }
+
+    // Build the Dashboard Form (Modal)
+    const modal = new ModalBuilder()
+      .setCustomId('news_dashboard_modal')
+      .setTitle('🚚 Euro Logistics News Dashboard');
+
+    const titleInput = new TextInputBuilder()
+      .setCustomId('news_title')
+      .setLabel('Announcement Title')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g., Weekly Convoy Update / Fleet expansion!')
+      .setRequired(true)
+      .setMaxLength(256);
+
+    const descInput = new TextInputBuilder()
+      .setCustomId('news_description')
+      .setLabel('News Description / Details')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Enter full details here...')
+      .setRequired(true)
+      .setMaxLength(4000);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(descInput)
+    );
+
+    await interaction.showModal(modal);
   }
 
-  const newsEmbed = {
-    color: 0x53B7ED,
-    title: '🚚 Euro Logistics Official News',
-    description: newsContent || '*(See attached media)*',
-    footer: {
-      text: `Published by ${message.author.tag}`,
-    },
-    timestamp: new Date().toISOString()
-  };
+  // B. Handle Modal Submission
+  if (interaction.isModalSubmit() && interaction.customId === 'news_dashboard_modal') {
+    const title = interaction.fields.getTextInputValue('news_title');
+    const description = interaction.fields.getTextInputValue('news_description');
 
-  if (attachment && attachment.contentType?.startsWith('image/')) {
-    newsEmbed.image = { url: attachment.url };
-    await message.channel.send({ embeds: [newsEmbed] });
-  } else if (attachment) {
-    await message.channel.send({
-      embeds: [newsEmbed],
-      files: [attachment.url]
-    });
-  } else {
-    await message.channel.send({ embeds: [newsEmbed] });
+    // Retrieve pending media if uploaded during /news
+    const media = client.pendingNewsMedia?.get(interaction.user.id);
+
+    const newsEmbed = {
+      color: 0x53B7ED, // Euro Logistics Blue
+      title: `🚚 ${title}`,
+      description: description,
+      footer: {
+        text: `Published by ${interaction.user.tag}`,
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    // Process attached media & spoilers
+    if (media) {
+      const isImage = media.contentType?.startsWith('image/');
+      
+      if (isImage && !media.spoiler) {
+        // Normal non-spoiler image embedded cleanly
+        newsEmbed.image = { url: media.url };
+        await interaction.reply({ embeds: [newsEmbed] });
+      } else {
+        // Video, sound file, or spoiler media
+        const attachmentFile = new AttachmentBuilder(media.url, { 
+          name: media.name 
+        });
+
+        if (media.spoiler) {
+          attachmentFile.setSpoiler(true);
+        }
+
+        await interaction.reply({
+          embeds: [newsEmbed],
+          files: [attachmentFile]
+        });
+      }
+
+      // Clear cached media after sending
+      client.pendingNewsMedia.delete(interaction.user.id);
+    } else {
+      // Text-only news submission
+      await interaction.reply({ embeds: [newsEmbed] });
+    }
   }
 });
 
