@@ -6,16 +6,23 @@ const {
   Routes, 
   SlashCommandBuilder, 
   PermissionFlagsBits,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  ActionRowBuilder,
   AttachmentBuilder
 } = require('discord.js');
 
 // 1. Setup Express Web Server
 const app = express();
 const PORT = process.env.PORT || 10000;
+
+app.get('/', (req, res) => {
+  res.send('Euro Logistics VTC Web Backend & Discord Bot is Online!');
+});
 
 app.get('/api/fleet-stats', (req, res) => {
   res.json({
@@ -47,25 +54,16 @@ const client = new Client({
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
-    .setDescription('Open the Euro Logistics News Dashboard')
+    .setDescription('Open the Interactive Euro Logistics News Dashboard')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addAttachmentOption(option =>
       option.setName('media')
         .setDescription('Upload image, video, or sound file')
         .setRequired(false)
     )
-    .addStringOption(option =>
-      option.setName('layout')
-        .setDescription('Choose layout: Banner (media bottom) or Side (thumbnail right)')
-        .setRequired(false)
-        .addChoices(
-          { name: 'Banner (Media at Bottom)', value: 'banner' },
-          { name: 'Side (Thumbnail on Right)', value: 'side' }
-        )
-    )
     .addBooleanOption(option =>
       option.setName('spoiler')
-        .setDescription('Mark uploaded media attachment as a spoiler?')
+        .setDescription('Mark uploaded media as spoiler?')
         .setRequired(false)
     )
 ];
@@ -92,30 +90,61 @@ client.once('ready', async () => {
   }
 });
 
+// Store active dashboard sessions
+client.dashboardSessions = new Map();
+
 // 3. Handle Interactions
 client.on('interactionCreate', async interaction => {
   
-  // A. Trigger /news command -> Cache settings and open Dashboard Modal
+  // A. Trigger /news command -> Sends an interactive dashboard panel
   if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
     const attachment = interaction.options.getAttachment('media');
-    const layout = interaction.options.getString('layout') || 'banner';
     const isSpoiler = interaction.options.getBoolean('spoiler') || false;
 
-    // Cache user settings for this command invocation
-    client.pendingNewsData = client.pendingNewsData || new Map();
-    client.pendingNewsData.set(interaction.user.id, {
-      attachment: attachment ? {
-        url: attachment.url,
-        name: attachment.name,
-        contentType: attachment.contentType
-      } : null,
-      layout: layout,
-      spoiler: isSpoiler
+    client.dashboardSessions.set(interaction.user.id, {
+      attachment: attachment ? { url: attachment.url, name: attachment.name, contentType: attachment.contentType } : null,
+      spoiler: isSpoiler,
+      layout: 'banner', // Default: Image first / banner bottom
+      reactions: ['👍', '🎉', '❤️', '🔥', '🚚']
     });
 
+    const layoutSelect = new StringSelectMenuBuilder()
+      .setCustomId('dashboard_layout_select')
+      .setPlaceholder('Select News Layout Style...')
+      .addOptions([
+        { label: 'Banner Style (Image / Media First at Bottom)', value: 'banner', description: 'Large media view underneath text' },
+        { label: 'Side-by-Side Style (Thumbnail on Right)', value: 'side', description: 'Compact thumbnail next to text' }
+      ]);
+
+    const openModalBtn = new ButtonBuilder()
+      .setCustomId('dashboard_open_modal')
+      .setLabel('✍️ Write Title & Post Content')
+      .setStyle(ButtonStyle.Primary);
+
+    const row1 = new ActionRowBuilder().addComponents(layoutSelect);
+    const row2 = new ActionRowBuilder().addComponents(openModalBtn);
+
+    await interaction.reply({
+      content: `### 🚚 Euro Logistics News Dashboard\nConfigure your layout and content below:\n* **Attached Media:** ${attachment ? attachment.name : 'None'}\n* **Spoiler Enabled:** \`${isSpoiler}\``,
+      components: [row1, row2],
+      ephemeral: true
+    });
+  }
+
+  // B. Handle Layout Select Menu
+  if (interaction.isStringSelectMenu() && interaction.customId === 'dashboard_layout_select') {
+    const session = client.dashboardSessions.get(interaction.user.id);
+    if (session) {
+      session.layout = interaction.values[0];
+    }
+    await interaction.update({ content: `✅ Layout updated to: **${interaction.values[0].toUpperCase()}**` });
+  }
+
+  // C. Handle Button to Open Text Modal Form
+  if (interaction.isButton() && interaction.customId === 'dashboard_open_modal') {
     const modal = new ModalBuilder()
-      .setCustomId('news_dashboard_modal')
-      .setTitle('Euro Logistics News Dashboard');
+      .setCustomId('dashboard_final_modal')
+      .setTitle('Euro Logistics News Content');
 
     const titleInput = new TextInputBuilder()
       .setCustomId('news_title')
@@ -141,13 +170,12 @@ client.on('interactionCreate', async interaction => {
     await interaction.showModal(modal);
   }
 
-  // B. Handle Modal Submission
-  if (interaction.isModalSubmit() && interaction.customId === 'news_dashboard_modal') {
+  // D. Handle Final Modal Submit & Publish
+  if (interaction.isModalSubmit() && interaction.customId === 'dashboard_final_modal') {
     const title = interaction.fields.getTextInputValue('news_title');
     const postContent = interaction.fields.getTextInputValue('news_post');
-    const config = client.pendingNewsData?.get(interaction.user.id) || { layout: 'banner', spoiler: false };
+    const session = client.dashboardSessions.get(interaction.user.id) || { layout: 'banner', spoiler: false, reactions: ['👍', '🎉', '❤️', '🔥', '🚚'] };
 
-    // Build base Euro Logistics Blue embed
     const newsEmbed = {
       color: 0x53B7ED,
       title: title,
@@ -160,22 +188,22 @@ client.on('interactionCreate', async interaction => {
 
     let replyMessage;
 
-    if (config.attachment) {
-      const isImage = config.attachment.contentType?.startsWith('image/');
+    if (session.attachment) {
+      const isImage = session.attachment.contentType?.startsWith('image/');
 
-      if (isImage && !config.spoiler) {
-        if (config.layout === 'side') {
-          newsEmbed.thumbnail = { url: config.attachment.url };
+      if (isImage && !session.spoiler) {
+        if (session.layout === 'side') {
+          newsEmbed.thumbnail = { url: session.attachment.url };
         } else {
-          newsEmbed.image = { url: config.attachment.url };
+          newsEmbed.image = { url: session.attachment.url };
         }
         replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
       } else {
-        const attachmentFile = new AttachmentBuilder(config.attachment.url, { 
-          name: config.attachment.name 
+        const attachmentFile = new AttachmentBuilder(session.attachment.url, { 
+          name: session.attachment.name 
         });
 
-        if (config.spoiler) {
+        if (session.spoiler) {
           attachmentFile.setSpoiler(true);
         }
 
@@ -185,20 +213,20 @@ client.on('interactionCreate', async interaction => {
           fetchReply: true
         });
       }
-
-      client.pendingNewsData.delete(interaction.user.id);
     } else {
       replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
     }
 
-    // Add default interactive reactions to the published news post
+    // Add plenty of reactions automatically
     try {
-      await replyMessage.react('👍');
-      await replyMessage.react('🎉');
-      await replyMessage.react('❤️');
+      for (const emoji of session.reactions) {
+        await replyMessage.react(emoji);
+      }
     } catch (err) {
       console.error('Failed to add reactions:', err);
     }
+
+    client.dashboardSessions.delete(interaction.user.id);
   }
 });
 
