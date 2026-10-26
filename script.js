@@ -101,9 +101,9 @@ function handleFormSubmit(e) {
   closeModal();
 }
 
-// Initialize polling and execution
+// Poll every 1 second (1000 ms)
 fetchNodeStats();
-setInterval(fetchNodeStats, 5000);
+setInterval(fetchNodeStats, 1000);
 
 window.onclick = function(event) {
   const modal = document.getElementById('app-modal');
