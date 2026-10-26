@@ -42,15 +42,25 @@ const client = new Client({
   ]
 });
 
-// Define the /news slash command
+// Define the /news slash command with direct file upload & spoiler toggle
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
     .setDescription('Open the Euro Logistics News Dashboard')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addAttachmentOption(option =>
+      option.setName('media')
+        .setDescription('Upload an image, video, or sound file directly')
+        .setRequired(false)
+    )
+    .addBooleanOption(option =>
+      option.setName('spoiler')
+        .setDescription('Mark uploaded media as a spoiler? (True/False)')
+        .setRequired(false)
+    )
 ];
 
-// Register slash command cleanly (clearing globals, setting server-specific)
+// Register slash command cleanly
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
 
@@ -60,7 +70,7 @@ client.once('ready', async () => {
     console.log('Cleaning up old global commands...');
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
 
-    console.log('Registering Truckline-style News Dashboard command...');
+    console.log('Registering News Dashboard command with file upload...');
     await rest.put(
       Routes.applicationGuildCommands(client.user.id, '1564236424155373568'),
       { body: commands }
@@ -72,16 +82,28 @@ client.once('ready', async () => {
   }
 });
 
-// 3. Handle Interactions (/news trigger & Modal Dashboard submission)
+// 3. Handle Interactions
 client.on('interactionCreate', async interaction => {
   
-  // A. Handle /news command -> Opens the Truckline-style Modal Form
+  // A. Handle /news command -> Cache uploaded file & open Modal Form
   if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
+    const attachment = interaction.options.getAttachment('media');
+    const isSpoiler = interaction.options.getBoolean('spoiler') || false;
+
+    if (attachment) {
+      client.pendingNewsMedia = client.pendingNewsMedia || new Map();
+      client.pendingNewsMedia.set(interaction.user.id, {
+        url: attachment.url,
+        name: attachment.name,
+        contentType: attachment.contentType,
+        spoiler: isSpoiler
+      });
+    }
+
     const modal = new ModalBuilder()
       .setCustomId('truckline_news_modal')
       .setTitle('🚚 Euro Logistics News Dashboard');
 
-    // Title Input (mirrors TrucklineMP Title box)
     const titleInput = new TextInputBuilder()
       .setCustomId('news_title')
       .setLabel('Title')
@@ -90,15 +112,6 @@ client.on('interactionCreate', async interaction => {
       .setRequired(true)
       .setMaxLength(200);
 
-    // Cover Image URL Input (mirrors TrucklineMP Cover image field)
-    const coverImageInput = new TextInputBuilder()
-      .setCustomId('news_cover_image')
-      .setLabel('Cover Image (Optional HTTPS Link)')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('https://')
-      .setRequired(false);
-
-    // Post / Description Body (mirrors TrucklineMP Post markdown box)
     const postInput = new TextInputBuilder()
       .setCustomId('news_post')
       .setLabel('Post Content / Markdown')
@@ -109,18 +122,17 @@ client.on('interactionCreate', async interaction => {
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(coverImageInput),
       new ActionRowBuilder().addComponents(postInput)
     );
 
     await interaction.showModal(modal);
   }
 
-  // B. Handle Modal Form Submission & Publish Embed
+  // B. Handle Modal Form Submission & Publish Embed with Uploaded File
   if (interaction.isModalSubmit() && interaction.customId === 'truckline_news_modal') {
     const title = interaction.fields.getTextInputValue('news_title');
-    const coverImage = interaction.fields.getTextInputValue('news_cover_image');
     const postContent = interaction.fields.getTextInputValue('news_post');
+    const media = client.pendingNewsMedia?.get(interaction.user.id);
 
     const newsEmbed = {
       color: 0x53B7ED, // Euro Logistics Blue Theme
@@ -132,12 +144,31 @@ client.on('interactionCreate', async interaction => {
       timestamp: new Date().toISOString()
     };
 
-    // Attach cover image if a valid URL was provided
-    if (coverImage && coverImage.startsWith('http')) {
-      newsEmbed.image = { url: coverImage };
-    }
+    if (media) {
+      const isImage = media.contentType?.startsWith('image/');
+      
+      if (isImage && !media.spoiler) {
+        newsEmbed.image = { url: media.url };
+        await interaction.reply({ embeds: [newsEmbed] });
+      } else {
+        const attachmentFile = new AttachmentBuilder(media.url, { 
+          name: media.name 
+        });
 
-    await interaction.reply({ embeds: [newsEmbed] });
+        if (media.spoiler) {
+          attachmentFile.setSpoiler(true);
+        }
+
+        await interaction.reply({
+          embeds: [newsEmbed],
+          files: [attachmentFile]
+        });
+      }
+
+      client.pendingNewsMedia.delete(interaction.user.id);
+    } else {
+      await interaction.reply({ embeds: [newsEmbed] });
+    }
   }
 });
 
