@@ -75,21 +75,36 @@ const commands = [
     .setDescription('Check if the Discord bot and web backend are online and responding'),
   new SlashCommandBuilder()
     .setName('post-status')
-    .setDescription('Manually post a custom system status update to the status channel')
+    .setDescription('Post a professional service status update embed')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
-      option.setName('status_type')
-        .setDescription('Is it operational, maintenance, or an outage?')
+      option.setName('title')
+        .setDescription('Title of the update (e.g., Scheduled Maintenance, API Outage)')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName('state')
+        .setDescription('Current state (e.g., Maintenance, Investigating, Completed)')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName('severity')
+        .setDescription('Choose severity color level')
         .setRequired(true)
         .addChoices(
-          { name: '🟢 Operational / Recovered', value: 'GREEN' },
-          { name: '🟡 Maintenance / Degraded', value: 'YELLOW' },
-          { name: '🔴 Outage / Down', value: 'RED' }
+          { name: '🟢 Operational / Completed', value: 'GREEN' },
+          { name: '🟡 Degraded / Maintenance', value: 'YELLOW' },
+          { name: '🔴 Outage / Critical', value: 'RED' }
         )
     )
     .addStringOption(option =>
+      option.setName('impacted_services')
+        .setDescription('List affected services separated by commas (e.g., api, web, database)')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
       option.setName('details')
-        .setDescription('Describe what is happening or what service is affected')
+        .setDescription('Detailed explanation of what is happening')
         .setRequired(true)
     ),
   new SlashCommandBuilder()
@@ -344,9 +359,12 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [statusEmbed] });
   }
 
-  // F. Execute /post-status (Manual staff status broadcasts)
+  // F. Execute /post-status (Professional Incident / Maintenance Embed)
   if (interaction.isChatInputCommand() && interaction.commandName === 'post-status') {
-    const statusType = interaction.options.getString('status_type');
+    const title = interaction.options.getString('title');
+    const state = interaction.options.getString('state');
+    const severity = interaction.options.getString('severity');
+    const impactedInput = interaction.options.getString('impacted_services');
     const details = interaction.options.getString('details');
     const TARGET_CHANNEL_ID = '1564280861787033681';
 
@@ -356,28 +374,24 @@ client.on('interactionCreate', async interaction => {
     }
 
     let color = 0x57F287; // Green
-    let title = '🟢 Euro Logistics • System Operational';
+    if (severity === 'YELLOW') color = 0xFEE75C; // Yellow
+    if (severity === 'RED') color = 0xED4245; // Red
 
-    if (statusType === 'YELLOW') {
-      color = 0xFEE75C; // Yellow
-      title = '🟡 Euro Logistics • Maintenance / Degraded Performance';
-    } else if (statusType === 'RED') {
-      color = 0xED4245; // Red
-      title = '🔴 Euro Logistics • System Outage Alert';
-    }
+    const servicesList = impactedInput
+      .split(',')
+      .map(service => `• \`${service.trim()}\` — **${state}**`)
+      .join('\n');
 
     const embed = {
       color: color,
       title: title,
-      description: details,
-      fields: [
-        { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true }
-      ],
+      description: `${details}\n\n### Impacted Services\n${servicesList}`,
+      footer: { text: `Euro Logistics Status • Updated by ${interaction.user.username}` },
       timestamp: new Date().toISOString()
     };
 
     await channel.send({ embeds: [embed] });
-    await interaction.reply({ content: `✅ Successfully posted the status update to <#${TARGET_CHANNEL_ID}>!`, ephemeral: true });
+    await interaction.reply({ content: `✅ Professional status update posted successfully to <#${TARGET_CHANNEL_ID}>!`, ephemeral: true });
   }
 
   // G. Execute /clear
