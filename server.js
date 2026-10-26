@@ -154,7 +154,7 @@ client.once('ready', async () => {
 
 // 3. Custom Welcome System (Avatar, Name & Member Count)
 client.on('guildMemberAdd', async member => {
-  const WELCOME_CHANNEL_ID = '1564280861787033681'; // Uses your status/welcome channel ID
+  const WELCOME_CHANNEL_ID = '1564304871203541072';
 
   const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
   if (!channel) return;
