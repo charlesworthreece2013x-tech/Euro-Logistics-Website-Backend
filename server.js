@@ -19,17 +19,13 @@ app.get('/', (req, res) => {
   res.send('Euro Logistics VTC Web Backend & Discord Bot is Online!');
 });
 
-// Telemetry API endpoint containing driver data and miles
+// Telemetry API endpoint initialized with empty driver state
 app.get('/api/fleet-stats', (req, res) => {
   res.json({
     status: "ONLINE",
-    activeDrivers: 3,
-    totalMiles: 31750,
-    drivers: [
-      { name: "Euro Logistics", rank: "VTC Owner", miles: 18450, status: "On Duty" },
-      { name: "Alpha_Hauler", rank: "Senior Driver", miles: 9200, status: "Driving ETS2" },
-      { name: "Nordic_Trucker", rank: "Fleet Driver", miles: 4100, status: "In Convoy" }
-    ]
+    activeDrivers: 0,
+    totalMiles: 0,
+    drivers: [] // Populates automatically as drivers log miles on your website
   });
 });
 
@@ -51,11 +47,16 @@ const client = new Client({
 const commands = [
   new SlashCommandBuilder()
     .setName('setup-verification')
-    .setDescription('Post the Euro Logistics verification embed with button')
+    .setDescription('Post the Euro Logistics verification embed with dual roles')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption(option =>
+      option.setName('verified_role')
+        .setDescription('Select the general Verified role')
+        .setRequired(true)
+    )
+    .addRoleOption(option =>
       option.setName('driver_role')
-        .setDescription('Select the Driver role to assign to verified users')
+        .setDescription('Select the Driver role')
         .setRequired(true)
     ),
   new SlashCommandBuilder()
@@ -85,8 +86,10 @@ client.once('ready', async () => {
   }
 });
 
-// 3. Counting System Memory & Moderation
+// 3. Systems Memory (Counting & Advanced Anti-Spam Tracking)
 client.countingData = new Map();
+const userMessageHistory = new Map(); // Anti-spam rate limiter tracking
+
 const BLACKLISTED_WORDS = ['discord.gg/', 't.me/', 'badword1', 'badword2'];
 
 client.on('messageCreate', async message => {
@@ -100,13 +103,13 @@ client.on('messageCreate', async message => {
     if (!isNaN(parsedNumber)) {
       const expectedNumber = countingState.count + 1;
 
-      if (parsedNumber === expectedNumber && message.author.id !== countingState.lastUser) {
+      if (parsedNumber === expectedNumber && (countingState.count === 0 || message.author.id !== countingState.lastUser)) {
         countingState.count = expectedNumber;
         countingState.lastUser = message.author.id;
         await message.react('✅').catch(() => {});
         return;
       } else {
-        await message.delete().catch(() => {});
+        await message.react('❌').catch(() => {});
         const failMsg = await message.channel.send(`❌ **${message.author.username}** ruined the count at **${expectedNumber - 1}**! Restart from **1**.`);
         setTimeout(() => failMsg.delete().catch(() => {}), 6000);
         
@@ -115,22 +118,49 @@ client.on('messageCreate', async message => {
         return;
       }
     } else {
-      await message.delete().catch(() => {});
+      await message.react('❌').catch(() => {});
       const textWarn = await message.channel.send(`⚠️ **${message.author.username}**, only numbers are allowed here! Current count is **${countingState.count}**.`);
       setTimeout(() => textWarn.delete().catch(() => {}), 4000);
       return;
     }
   }
 
-  // B. Auto-Mod Filter
+  // B. Advanced Moderation System (Word Filter & Anti-Spam Flood Protection)
   const contentLower = message.content.toLowerCase();
+  
+  // 1. Blacklisted Word / Link Filter
   if (BLACKLISTED_WORDS.some(word => contentLower.includes(word))) {
     try {
       await message.delete();
-      const warningMsg = await message.channel.send(`⚠️ **${message.author.username}**, your message was removed because it violated community guidelines.`);
+      const warningMsg = await message.channel.send(`⚠️ **${message.author.username}**, your message was removed because it contained restricted content.`);
       setTimeout(() => warningMsg.delete().catch(() => {}), 5000);
+      return;
     } catch (error) {
-      console.error('Error handling auto-mod deletion:', error);
+      console.error('Error handling word filter deletion:', error);
+    }
+  }
+
+  // 2. Anti-Spam / Anti-Flood Protection (Max 5 messages within 4 seconds)
+  const userId = message.author.id;
+  const now = Date.now();
+  if (!userMessageHistory.has(userId)) {
+    userMessageHistory.set(userId, []);
+  }
+
+  const timestamps = userMessageHistory.get(userId);
+  timestamps.push(now);
+
+  // Filter timestamps within the last 4 seconds
+  const recentTimestamps = timestamps.filter(time => now - time < 4000);
+  userMessageHistory.set(userId, recentTimestamps);
+
+  if (recentTimestamps.length > 5) {
+    try {
+      await message.delete();
+      const spamWarn = await message.channel.send(`🚨 **${message.author.username}**, please slow down! You are sending messages too quickly.`);
+      setTimeout(() => spamWarn.delete().catch(() => {}), 5000);
+    } catch (error) {
+      console.error('Error handling spam protection:', error);
     }
   }
 });
@@ -138,27 +168,29 @@ client.on('messageCreate', async message => {
 // 4. Handle Interactions & Commands
 client.on('interactionCreate', async interaction => {
   
-  // A. Execute /setup-verification
+  // A. Execute /setup-verification (Dual Roles)
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
+    const verifiedRole = interaction.options.getRole('verified_role');
     const driverRole = interaction.options.getRole('driver_role');
 
     const embed = {
       color: 0x53B7ED,
       title: 'Verification',
-      description: 'Welcome to **Euro Logistics VTC**!\n\nTo gain full access to our community channels, driver resources, and event updates, please verify your account below.\n\n### How to Verify:\n1. Click the **Verify** button below.\n2. Receive your **Driver** role automatically.',
+      description: 'Welcome to **Euro Logistics VTC**!\n\nTo gain full access to our community channels, driver resources, and event updates, please verify your account below.\n\n### How to Verify:\n1. Click the **Verify** button below.\n2. Receive both your **Verified** and **Driver** roles automatically.',
       footer: { text: 'Euro Logistics VTC • Driver Access System' },
       timestamp: new Date().toISOString()
     };
 
+    // Store both role IDs separated by underscores in customId
     const verifyBtn = new ButtonBuilder()
-      .setCustomId(`verify_driver_${driverRole.id}`)
+      .setCustomId(`verify_dual_${verifiedRole.id}_${driverRole.id}`)
       .setLabel('Verify')
       .setStyle(ButtonStyle.Success);
 
     const row = new ActionRowBuilder().addComponents(verifyBtn);
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: `✅ Verification panel posted! Users will be granted the **${driverRole.name}** role upon clicking verify.`, ephemeral: true });
+    await interaction.reply({ content: `✅ Verification panel posted! Users will receive **${verifiedRole.name}** and **${driverRole.name}** upon clicking verify.`, ephemeral: true });
   }
 
   // B. Execute /setup-counting
@@ -167,31 +199,33 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ This channel has been successfully set up as the **Counting Game** channel! Start with **1**.` });
   }
 
-  // C. Execute /leaderboard (Grabs telemetry data from the website API)
+  // C. Execute /leaderboard (Grabs telemetry data from website API)
   if (interaction.isChatInputCommand() && interaction.commandName === 'leaderboard') {
     await interaction.deferReply();
 
     try {
-      // Fetch telemetry data from your backend API route
-      // (Using localhost to query the built-in express server endpoint safely)
       const port = process.env.PORT || 10000;
       const response = await fetch(`http://localhost:${port}/api/fleet-stats`);
       const data = await response.json();
 
-      // Sort drivers by miles in descending order (highest miles first)
-      const sortedDrivers = data.drivers.sort((a, b) => b.miles - a.miles);
+      let leaderboardDescription = "";
 
-      // Build leaderboard text medals
-      const medals = ['🥇', '🥈', '🥉'];
-      const leaderboardText = sortedDrivers.map((driver, index) => {
-        const medal = medals[index] || `\`#${index + 1}\``;
-        return `${medal} **${driver.name}** — *${driver.miles.toLocaleString()} miles* (${driver.rank})`;
-      }).join('\n');
+      if (!data.drivers || data.drivers.length === 0) {
+        leaderboardDescription = "ℹ️ *No drivers online or logged miles yet.*";
+      } else {
+        const sortedDrivers = data.drivers.sort((a, b) => b.miles - a.miles);
+        const medals = ['🥇', '🥈', '🥉'];
+        
+        leaderboardDescription = sortedDrivers.map((driver, index) => {
+          const medal = medals[index] || `\`#${index + 1}\``;
+          return `${medal} **${driver.name}** — *${driver.miles.toLocaleString()} miles* (${driver.rank})`;
+        }).join('\n');
+      }
 
       const leaderboardEmbed = {
         color: 0x53B7ED,
         title: '🚚 Euro Logistics • Driver Leaderboard',
-        description: `Here are our top drivers ranked by total logged miles fetched from website telemetry:\n\n${leaderboardText}\n\n**Total Fleet Miles:** \`${data.totalMiles.toLocaleString()} miles\``,
+        description: `Here are our top drivers ranked by total logged miles fetched from website telemetry:\n\n${leaderboardDescription}\n\n**Total Fleet Miles:** \`${data.totalMiles.toLocaleString()} miles\``,
         footer: { text: 'Euro Logistics VTC • Live Telemetry' },
         timestamp: new Date().toISOString()
       };
@@ -203,28 +237,32 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // D. Handle "Verify" Button Click
-  if (interaction.isButton() && interaction.customId.startsWith('verify_driver_')) {
-    const roleId = interaction.customId.replace('verify_driver_', '');
+  // D. Handle Dual-Role "Verify" Button Click
+  if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
+    const parts = interaction.customId.split('_');
+    const verifiedRoleId = parts[2];
+    const driverRoleId = parts[3];
     const member = interaction.member;
 
     try {
-      if (member.roles.cache.has(roleId)) {
+      if (member.roles.cache.has(verifiedRoleId) && member.roles.cache.has(driverRoleId)) {
         return await interaction.reply({
-          content: 'ℹ️ You are already verified and have the Driver role in **Euro Logistics**!',
+          content: 'ℹ️ You are already fully verified in **Euro Logistics**!',
           ephemeral: true
         });
       }
 
-      await member.roles.add(roleId);
+      await member.roles.add(verifiedRoleId);
+      await member.roles.add(driverRoleId);
+
       await interaction.reply({
-        content: '✅ Verification successful! The **Driver** role has been assigned. Welcome to the fleet!',
+        content: '✅ Verification successful! Both your **Verified** and **Driver** roles have been assigned. Welcome to the fleet!',
         ephemeral: true
       });
     } catch (error) {
-      console.error('Error assigning driver role:', error);
+      console.error('Error assigning verification roles:', error);
       await interaction.reply({
-        content: '❌ Failed to assign the Driver role. Please ensure my bot role is placed higher than the Driver role in Discord Server Settings > Roles!',
+        content: '❌ Failed to assign roles. Please ensure my bot role is placed higher than both target roles in Server Settings > Roles!',
         ephemeral: true
       });
     }
