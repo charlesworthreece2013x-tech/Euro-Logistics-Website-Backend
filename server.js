@@ -24,36 +24,45 @@ app.use(express.json());
 // Serve static frontend files (HTML, CSS, JS, images) directly from the root folder
 app.use(express.static(path.join(__dirname)));
 
-// Dynamic Telemetry API Endpoint integrated with TrucklineMP driver session
+// Dynamic Telemetry API Endpoint integrated with TrucklineMP live map API
 app.get('/api/fleet-stats', async (req, res) => {
-  const targetPlayer = 'transit'; // Your exact in-game profile name on TrucklineMP
+  const targetPlayer = 'transit'; // Your exact in-game profile name
 
   try {
     let isOnline = false;
     let serverName = 'Europe Traffic';
+    let loggedMiles = 544;
 
-    // Query TrucklineMP API for active map player search
+    // Fetch live map player search endpoint
     const mapResponse = await fetch(`https://api.trucklinemp.com/v1/map/players?search=${encodeURIComponent(targetPlayer)}`, {
-      headers: { 'User-Agent': 'EuroLogisticsVTC-Web/1.0' }
-    }).catch(() => null);
-
-    if (mapResponse && mapResponse.ok) {
-      const playerData = await mapResponse.json();
-      if (Array.isArray(playerData) && playerData.some(p => p.username?.toLowerCase() === targetPlayer.toLowerCase())) {
-        isOnline = true;
+      headers: { 
+        'User-Agent': 'EuroLogisticsVTC-Web/1.0',
+        'Accept': 'application/json'
       }
-    }
+    });
 
-    // Active status confirmation for live map session
-    if (!isOnline) {
-      isOnline = true; 
+    if (mapResponse.ok) {
+      const data = await mapResponse.json();
+      
+      // Look for your specific player profile in the API results array
+      const playerSession = Array.isArray(data) 
+        ? data.find(p => p.username && p.username.toLowerCase() === targetPlayer.toLowerCase())
+        : (data.username && data.username.toLowerCase() === targetPlayer.toLowerCase() ? data : null);
+
+      if (playerSession) {
+        isOnline = true;
+        serverName = playerSession.server || 'Europe Traffic';
+        if (playerSession.distance) {
+          loggedMiles = playerSession.distance;
+        }
+      }
     }
 
     const driversList = isOnline ? [
       {
         name: targetPlayer,
         rank: "VTC Owner",
-        miles: 544, // Total distance logged on TrucklineMP session
+        miles: loggedMiles,
         status: `Driving ETS2 (${serverName})`
       }
     ] : [];
@@ -61,20 +70,18 @@ app.get('/api/fleet-stats', async (req, res) => {
     res.json({
       status: "ONLINE",
       activeDrivers: driversList.length,
-      totalMiles: isOnline ? 544 : 0,
+      totalMiles: isOnline ? loggedMiles : 0,
       drivers: driversList
     });
 
   } catch (error) {
-    console.error('Error in fleet stats telemetry endpoint:', error.message);
+    console.error('Error fetching TrucklineMP API:', error.message);
 
     res.json({
       status: "ONLINE",
-      activeDrivers: 1,
-      totalMiles: 544,
-      drivers: [
-        { name: targetPlayer, rank: "VTC Owner", miles: 544, status: "Driving ETS2 (Europe Traffic)" }
-      ]
+      activeDrivers: 0,
+      totalMiles: 0,
+      drivers: []
     });
   }
 });
@@ -264,7 +271,7 @@ async function inspectUrlSafety(targetUrl) {
       return { safe: false, reason: 'Known malicious domain pattern detected.' };
     }
 
-    // 2. Direct IP Address Host Check (e.g., http://192.168.1.1/malware)
+    // 2. Direct IP Address Host Check
     const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
     if (ipPattern.test(domain)) {
       return { safe: false, reason: 'Direct IP address links are restricted for security.' };
@@ -272,7 +279,7 @@ async function inspectUrlSafety(targetUrl) {
 
     // 3. HTTP Request Check (Follow redirects & examine final response headers)
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000); // 4-second timeout guard
+    const timeout = setTimeout(() => controller.abort(), 4000);
 
     const response = await fetch(targetUrl, {
       method: 'GET',
@@ -284,17 +291,14 @@ async function inspectUrlSafety(targetUrl) {
     const finalUrl = response.url.toLowerCase();
     const contentType = (response.headers.get('content-type') || '').toLowerCase();
 
-    // Check if redirect ended up on a blacklisted domain
     if (BLACKLISTED_DOMAINS.some(badDomain => finalUrl.includes(badDomain))) {
       return { safe: false, reason: 'Link redirects to a blacklisted destination.' };
     }
 
-    // Check if the link points to or downloads an executable file
     if (DANGEROUS_EXTENSIONS.some(ext => finalUrl.endsWith(ext)) || contentType.includes('application/x-msdownload')) {
       return { safe: false, reason: 'Direct link to an executable or dangerous file.' };
     }
 
-    // Check for HTTP server error or dead destination
     if (response.status >= 400 && response.status !== 403) {
       return { safe: false, reason: `Link target returned an invalid HTTP status code (${response.status}).` };
     }
@@ -363,7 +367,6 @@ client.on('messageCreate', async message => {
   const detectedUrls = message.content.match(urlRegex);
 
   if (detectedUrls && detectedUrls.length > 0) {
-    // Exempt administrators from link restrictions
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
       for (const link of detectedUrls) {
         const checkResult = await inspectUrlSafety(link);
@@ -373,7 +376,7 @@ client.on('messageCreate', async message => {
             await message.delete();
             const alertMsg = await message.channel.send(`🛡️ **${message.author.username}**, your message was removed. **Reason:** ${checkResult.reason}`);
             setTimeout(() => alertMsg.delete().catch(() => {}), 7000);
-            return; // Stop processing further links in this message
+            return;
           } catch (err) {
             console.error('Error removing unsafe link message:', err);
           }
