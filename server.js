@@ -42,7 +42,7 @@ const client = new Client({
   ]
 });
 
-// Define the /news slash command with optional attachment & spoiler toggle
+// Define the /news slash command with optional media attachment & spoiler toggle
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
@@ -60,7 +60,7 @@ const commands = [
     )
 ];
 
-// Register slash command with Discord API on startup
+// Register slash command directly to your server ID for instant access
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
 
@@ -69,24 +69,24 @@ client.once('ready', async () => {
   try {
     console.log('Registering News Dashboard slash command...');
     await rest.put(
-      Routes.applicationCommands(client.user.id),
+      Routes.applicationGuildCommands(client.user.id, '1564236424155373568'),
       { body: commands }
     );
-    console.log('Successfully registered /news command!');
+    console.log('Successfully registered /news command for your server!');
   } catch (error) {
     console.error('Error registering slash command:', error);
   }
 });
 
-// 3. Handle Interactions (/news & Modal Dashboard submission)
+// 3. Handle Interactions (/news trigger & Modal Dashboard submission)
 client.on('interactionCreate', async interaction => {
   
-  // A. Handle /news command trigger -> Opens Modal Dashboard
+  // A. Handle /news command execution -> Opens Modal Dashboard
   if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
     const attachment = interaction.options.getAttachment('media');
     const isSpoiler = interaction.options.getBoolean('spoiler') || false;
 
-    // Store attachment info temporarily on the client instance if attached
+    // Store attachment info temporarily if media was attached
     if (attachment) {
       client.pendingNewsMedia = client.pendingNewsMedia || new Map();
       client.pendingNewsMedia.set(interaction.user.id, {
@@ -106,7 +106,7 @@ client.on('interactionCreate', async interaction => {
       .setCustomId('news_title')
       .setLabel('Announcement Title')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('e.g., Weekly Convoy Update / Fleet expansion!')
+      .setPlaceholder('e.g., Weekly Convoy Update / Fleet Expansion!')
       .setRequired(true)
       .setMaxLength(256);
 
@@ -114,7 +114,7 @@ client.on('interactionCreate', async interaction => {
       .setCustomId('news_description')
       .setLabel('News Description / Details')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter full details here...')
+      .setPlaceholder('Enter full news details here...')
       .setRequired(true)
       .setMaxLength(4000);
 
@@ -126,16 +126,16 @@ client.on('interactionCreate', async interaction => {
     await interaction.showModal(modal);
   }
 
-  // B. Handle Modal Submission
+  // B. Handle Modal Form Submission
   if (interaction.isModalSubmit() && interaction.customId === 'news_dashboard_modal') {
     const title = interaction.fields.getTextInputValue('news_title');
     const description = interaction.fields.getTextInputValue('news_description');
 
-    // Retrieve pending media if uploaded during /news
+    // Retrieve pending media attached during /news execution
     const media = client.pendingNewsMedia?.get(interaction.user.id);
 
     const newsEmbed = {
-      color: 0x53B7ED, // Euro Logistics Blue
+      color: 0x53B7ED, // Euro Logistics Blue Theme
       title: `🚚 ${title}`,
       description: description,
       footer: {
@@ -149,11 +149,11 @@ client.on('interactionCreate', async interaction => {
       const isImage = media.contentType?.startsWith('image/');
       
       if (isImage && !media.spoiler) {
-        // Normal non-spoiler image embedded cleanly
+        // Embed image directly into the embed card
         newsEmbed.image = { url: media.url };
         await interaction.reply({ embeds: [newsEmbed] });
       } else {
-        // Video, sound file, or spoiler media
+        // Handle videos, audio, or media marked as spoiler
         const attachmentFile = new AttachmentBuilder(media.url, { 
           name: media.name 
         });
@@ -168,7 +168,7 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      // Clear cached media after sending
+      // Clear cached attachment memory
       client.pendingNewsMedia.delete(interaction.user.id);
     } else {
       // Text-only news submission
