@@ -1,45 +1,52 @@
-const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
+client.on('messageCreate', async message => {
+  // Ignore messages sent by bots or messages that don't start with !news
+  if (message.author.bot || !message.content.startsWith('!news')) return;
 
-// 1. Setup Express Web Server (for your website telemetry & Render health checks)
-const app = express();
-const PORT = process.env.PORT || 10000;
+  // Check for admin permissions
+  if (!message.member.permissions.has('Administrator')) {
+    return message.reply('You do not have permission to use the news command.');
+  }
 
-app.get('/api/fleet-stats', (req, res) => {
-  res.json({
-    status: "ONLINE",
-    activeDrivers: 3,
-    totalMiles: 31750,
-    drivers: [
-      { name: "Euro Logistics", rank: "VTC Owner", miles: 18450, status: "On Duty" },
-      { name: "Alpha_Hauler", rank: "Senior Driver", miles: 9200, status: "Driving ETS2" },
-      { name: "Nordic_Trucker", rank: "Fleet Driver", miles: 4100, status: "In Convoy" }
-    ]
-  });
-});
+  // Extract news text content
+  const newsContent = message.content.slice(5).trim();
+  const attachment = message.attachments.first(); // Check for attached media
 
-app.listen(PORT, () => {
-  console.log(`Euro Logistics server running on port ${PORT}`);
-});
+  if (!newsContent && !attachment) {
+    return message.reply('Please provide news text or attach a file. Example: `!news Convoy details attached!`');
+  }
 
-// 2. Setup Discord Bot Client
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
-});
+  // Delete the original command message to keep the channel clean
+  try {
+    await message.delete();
+  } catch (err) {
+    console.error('Failed to delete command message:', err);
+  }
 
-client.once('ready', () => {
-  console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
-});
+  // Build the rich news embed
+  const newsEmbed = {
+    color: 0x53B7ED, // Euro Logistics Blue
+    title: '🚚 Euro Logistics Official News',
+    description: newsContent || '*(See attached media)*',
+    footer: {
+      text: `Published by ${message.author.tag}`,
+    },
+    timestamp: new Date().toISOString()
+  };
 
-client.on('messageCreate', message => {
-  if (message.content === '!ping') {
-    message.reply('Pong! Euro Logistics telemetry is active.');
+  // If the attachment is an image, display it directly inside the embed card
+  if (attachment && attachment.contentType?.startsWith('image/')) {
+    newsEmbed.image = { url: attachment.url };
+    await message.channel.send({ embeds: [newsEmbed] });
+  } 
+  // If it's a video, audio, or other media file, attach it directly with the embed
+  else if (attachment) {
+    await message.channel.send({
+      embeds: [newsEmbed],
+      files: [attachment.url]
+    });
+  } 
+  // Text-only news
+  else {
+    await message.channel.send({ embeds: [newsEmbed] });
   }
 });
-
-// 3. Log into Discord using your environment token
-client.login(process.env.DISCORD_TOKEN);
