@@ -50,7 +50,7 @@ const client = new Client({
   ]
 });
 
-// Define the /news slash command with optional file upload & spoiler toggle
+// Define the /news slash command with file upload & spoiler toggle
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
@@ -104,15 +104,15 @@ client.on('interactionCreate', async interaction => {
     client.dashboardSessions.set(interaction.user.id, {
       file: file ? { url: file.url, name: file.name, contentType: file.contentType } : null,
       spoiler: isSpoiler,
-      layout: 'banner' // Default layout: Image/Media first
+      layout: 'banner' // Default layout choice
     });
 
     const layoutSelect = new StringSelectMenuBuilder()
       .setCustomId('news_layout_menu')
       .setPlaceholder('Select Layout Style...')
       .addOptions([
-        { label: 'Banner Style (Image / Media First at Bottom)', value: 'banner', description: 'Large media view underneath text' },
-        { label: 'Side-by-Side Style (Thumbnail on Right)', value: 'side', description: 'Compact thumbnail next to text' }
+        { label: 'Image First / Banner Style (Media View)', value: 'banner', description: 'Large media display attached to the announcement' },
+        { label: 'Thumbnail Side Style (Top Right)', value: 'side', description: 'Compact thumbnail next to your text' }
       ]);
 
     const continueBtn = new ButtonBuilder()
@@ -124,7 +124,7 @@ client.on('interactionCreate', async interaction => {
     const row2 = new ActionRowBuilder().addComponents(continueBtn);
 
     await interaction.reply({
-      content: `### Euro Logistics News Dashboard\n* **Cover File Uploaded:** ${file ? file.name : 'None (Text Only)'}\n* **Spoiler Enabled:** \`${isSpoiler}\`\n\nChoose your layout below, then click to write your post content:`,
+      content: `### Euro Logistics News Dashboard\n* **Cover File Uploaded:** ${file ? file.name : 'None (Text Only)'}\n* **Spoiler Enabled:** \`${isSpoiler}\`\n\nChoose your layout style below, then click to write your post content:`,
       components: [row1, row2],
       ephemeral: true
     });
@@ -176,7 +176,7 @@ client.on('interactionCreate', async interaction => {
     const session = client.dashboardSessions.get(interaction.user.id) || { layout: 'banner', spoiler: false, file: null };
 
     const newsEmbed = {
-      color: 0x53B7ED, // Euro Logistics Blue
+      color: 0x53B7ED, // Euro Logistics Blue Theme
       title: title,
       description: postContent,
       footer: {
@@ -198,7 +198,7 @@ client.on('interactionCreate', async interaction => {
         }
         publishedMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
       } else {
-        // Videos, audio sounds, or spoiler-tagged images
+        // Videos, audio sound files, or spoiler-tagged images
         const attachmentFile = new AttachmentBuilder(session.file.url, { 
           name: session.file.name 
         });
