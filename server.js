@@ -43,7 +43,7 @@ const client = new Client({
   ]
 });
 
-// Define the /news slash command with options for media, spoiler, and layout choice
+// Define the /news slash command
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
@@ -147,7 +147,7 @@ client.on('interactionCreate', async interaction => {
     const postContent = interaction.fields.getTextInputValue('news_post');
     const config = client.pendingNewsData?.get(interaction.user.id) || { layout: 'banner', spoiler: false };
 
-    // Build base Euro Logistics Blue embed (without truck emoji)
+    // Build base Euro Logistics Blue embed
     const newsEmbed = {
       color: 0x53B7ED,
       title: title,
@@ -165,15 +165,12 @@ client.on('interactionCreate', async interaction => {
 
       if (isImage && !config.spoiler) {
         if (config.layout === 'side') {
-          // Side layout: thumbnail image on top right
           newsEmbed.thumbnail = { url: config.attachment.url };
         } else {
-          // Banner layout: large image at bottom
           newsEmbed.image = { url: config.attachment.url };
         }
         replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
       } else {
-        // Videos, audio files (sound), or spoiler-tagged media
         const attachmentFile = new AttachmentBuilder(config.attachment.url, { 
           name: config.attachment.name 
         });
@@ -188,3 +185,22 @@ client.on('interactionCreate', async interaction => {
           fetchReply: true
         });
       }
+
+      client.pendingNewsData.delete(interaction.user.id);
+    } else {
+      replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
+    }
+
+    // Add default interactive reactions to the published news post
+    try {
+      await replyMessage.react('👍');
+      await replyMessage.react('🎉');
+      await replyMessage.react('❤️');
+    } catch (err) {
+      console.error('Failed to add reactions:', err);
+    }
+  }
+});
+
+// 4. Log into Discord
+client.login(process.env.DISCORD_TOKEN);
