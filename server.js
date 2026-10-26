@@ -68,7 +68,16 @@ const commands = [
     .setDescription('View top drivers ranked by miles grabbed from website telemetry'),
   new SlashCommandBuilder()
     .setName('fleet-status')
-    .setDescription('Check the overall live status and statistics of Euro Logistics')
+    .setDescription('Check the overall live status and statistics of Euro Logistics'),
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('Bulk delete a specified number of messages from the channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('Number of messages to delete (1-100)')
+        .setRequired(true)
+    )
 ];
 
 // Register slash commands on startup
@@ -102,7 +111,15 @@ const BLACKLISTED_WORDS = [
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
-  // A. Counting Channel Logic
+  const contentLower = message.content.toLowerCase();
+
+  // A. Custom Text Trigger: "euro logistics hi"
+  if (contentLower.includes('euro logistics hi')) {
+    await message.reply('Hello! Welcome to **Euro Logistics VTC**! 🚚 Let us know if you need any help out on the road.');
+    return;
+  }
+
+  // B. Counting Channel Logic
   const countingState = client.countingData.get(message.channel.id);
   if (countingState) {
     const parsedNumber = parseInt(message.content.trim());
@@ -132,8 +149,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // B. Advanced Moderation System (Profanity, Link Filter, & Anti-Spam Flood Protection)
-  const contentLower = message.content.toLowerCase();
+  // C. Advanced Moderation System (Profanity, Link Filter, & Anti-Spam Flood Protection)
   
   // 1. Blacklisted Words / Unauthorized Links Filter
   if (BLACKLISTED_WORDS.some(word => contentLower.includes(word))) {
@@ -270,7 +286,30 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // E. Handle Dual-Role "Verify" Button Click
+  // E. Execute /clear
+  if (interaction.isChatInputCommand() && interaction.commandName === 'clear') {
+    const amount = interaction.options.getInteger('amount');
+
+    if (amount < 1 || amount > 100) {
+      return interaction.reply({ content: '❌ Please provide a number between **1 and 100**.', ephemeral: true });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      const deleted = await interaction.channel.bulkDelete(amount, true);
+      await interaction.editReply({ 
+        content: `✅ Successfully cleared **${deleted.size}** messages from this channel!` 
+      });
+    } catch (error) {
+      console.error('Error clearing messages:', error);
+      await interaction.editReply({ 
+        content: '❌ Failed to clear messages. Note that Discord prevents bots from bulk-deleting messages older than 14 days.' 
+      });
+    }
+  }
+
+  // F. Handle Dual-Role "Verify" Button Click
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
