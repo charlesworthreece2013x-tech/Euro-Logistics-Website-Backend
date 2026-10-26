@@ -9,7 +9,7 @@ async function fetchNodeStats() {
     const data = await response.json();
     renderFleetData(data);
   } catch (err) {
-    // Fallback data if backend is asleep or offline
+    // Fallback data if backend is offline
     renderFleetData({
       status: "ONLINE",
       activeDrivers: 3,
@@ -85,29 +85,6 @@ function toggleAccordion(button) {
   }
 }
 
-function openModal() {
-  const modal = document.getElementById('app-modal');
-  if (modal) modal.style.display = 'flex';
-}
-
-function closeModal() {
-  const modal = document.getElementById('app-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function handleFormSubmit(e) {
-  e.preventDefault();
-  alert('Application received! Thank you for applying to Euro Logistics.');
-  closeModal();
-}
-
-// Poll every 1 second (1000 ms)
+// Poll backend every 1 second
 fetchNodeStats();
 setInterval(fetchNodeStats, 1000);
-
-window.onclick = function(event) {
-  const modal = document.getElementById('app-modal');
-  if (event.target === modal) {
-    closeModal();
-  }
-};
