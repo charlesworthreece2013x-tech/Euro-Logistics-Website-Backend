@@ -13,7 +13,7 @@ const {
   AttachmentBuilder
 } = require('discord.js');
 
-// 1. Setup Express Web Server (for website telemetry & Render health checks)
+// 1. Setup Express Web Server
 const app = express();
 const PORT = process.env.PORT || 10000;
 
@@ -38,11 +38,12 @@ app.listen(PORT, () => {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions
   ]
 });
 
-// Define the /news slash command with direct file upload & spoiler toggle
+// Define the /news slash command with options for media, spoiler, and layout choice
 const commands = [
   new SlashCommandBuilder()
     .setName('news')
@@ -50,12 +51,21 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addAttachmentOption(option =>
       option.setName('media')
-        .setDescription('Upload an image, video, or sound file directly')
+        .setDescription('Upload image, video, or sound file')
         .setRequired(false)
+    )
+    .addStringOption(option =>
+      option.setName('layout')
+        .setDescription('Choose layout: Banner (media bottom) or Side (thumbnail right)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Banner (Media at Bottom)', value: 'banner' },
+          { name: 'Side (Thumbnail on Right)', value: 'side' }
+        )
     )
     .addBooleanOption(option =>
       option.setName('spoiler')
-        .setDescription('Mark uploaded media as a spoiler? (True/False)')
+        .setDescription('Mark uploaded media attachment as a spoiler?')
         .setRequired(false)
     )
 ];
@@ -70,13 +80,13 @@ client.once('ready', async () => {
     console.log('Cleaning up old global commands...');
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
 
-    console.log('Registering News Dashboard command with file upload...');
+    console.log('Registering News Dashboard command...');
     await rest.put(
       Routes.applicationGuildCommands(client.user.id, '1564236424155373568'),
       { body: commands }
     );
     
-    console.log('Successfully registered /news dashboard command!');
+    console.log('Successfully registered /news command!');
   } catch (error) {
     console.error('Error registering slash command:', error);
   }
@@ -85,24 +95,27 @@ client.once('ready', async () => {
 // 3. Handle Interactions
 client.on('interactionCreate', async interaction => {
   
-  // A. Handle /news command -> Cache uploaded file & open Modal Form
+  // A. Trigger /news command -> Cache settings and open Dashboard Modal
   if (interaction.isChatInputCommand() && interaction.commandName === 'news') {
     const attachment = interaction.options.getAttachment('media');
+    const layout = interaction.options.getString('layout') || 'banner';
     const isSpoiler = interaction.options.getBoolean('spoiler') || false;
 
-    if (attachment) {
-      client.pendingNewsMedia = client.pendingNewsMedia || new Map();
-      client.pendingNewsMedia.set(interaction.user.id, {
+    // Cache user settings for this command invocation
+    client.pendingNewsData = client.pendingNewsData || new Map();
+    client.pendingNewsData.set(interaction.user.id, {
+      attachment: attachment ? {
         url: attachment.url,
         name: attachment.name,
-        contentType: attachment.contentType,
-        spoiler: isSpoiler
-      });
-    }
+        contentType: attachment.contentType
+      } : null,
+      layout: layout,
+      spoiler: isSpoiler
+    });
 
     const modal = new ModalBuilder()
-      .setCustomId('truckline_news_modal')
-      .setTitle('🚚 Euro Logistics News Dashboard');
+      .setCustomId('news_dashboard_modal')
+      .setTitle('Euro Logistics News Dashboard');
 
     const titleInput = new TextInputBuilder()
       .setCustomId('news_title')
@@ -116,7 +129,7 @@ client.on('interactionCreate', async interaction => {
       .setCustomId('news_post')
       .setLabel('Post Content / Markdown')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Write your update. Markdown works here...')
+      .setPlaceholder('Write your update. Markdown & ||spoilers|| work here...')
       .setRequired(true)
       .setMaxLength(4000);
 
@@ -128,15 +141,16 @@ client.on('interactionCreate', async interaction => {
     await interaction.showModal(modal);
   }
 
-  // B. Handle Modal Form Submission & Publish Embed with Uploaded File
-  if (interaction.isModalSubmit() && interaction.customId === 'truckline_news_modal') {
+  // B. Handle Modal Submission
+  if (interaction.isModalSubmit() && interaction.customId === 'news_dashboard_modal') {
     const title = interaction.fields.getTextInputValue('news_title');
     const postContent = interaction.fields.getTextInputValue('news_post');
-    const media = client.pendingNewsMedia?.get(interaction.user.id);
+    const config = client.pendingNewsData?.get(interaction.user.id) || { layout: 'banner', spoiler: false };
 
+    // Build base Euro Logistics Blue embed (without truck emoji)
     const newsEmbed = {
-      color: 0x53B7ED, // Euro Logistics Blue Theme
-      title: `🚚 ${title}`,
+      color: 0x53B7ED,
+      title: title,
       description: postContent,
       footer: {
         text: `Published by ${interaction.user.tag} • Euro Logistics VTC`,
@@ -144,33 +158,33 @@ client.on('interactionCreate', async interaction => {
       timestamp: new Date().toISOString()
     };
 
-    if (media) {
-      const isImage = media.contentType?.startsWith('image/');
-      
-      if (isImage && !media.spoiler) {
-        newsEmbed.image = { url: media.url };
-        await interaction.reply({ embeds: [newsEmbed] });
+    let replyMessage;
+
+    if (config.attachment) {
+      const isImage = config.attachment.contentType?.startsWith('image/');
+
+      if (isImage && !config.spoiler) {
+        if (config.layout === 'side') {
+          // Side layout: thumbnail image on top right
+          newsEmbed.thumbnail = { url: config.attachment.url };
+        } else {
+          // Banner layout: large image at bottom
+          newsEmbed.image = { url: config.attachment.url };
+        }
+        replyMessage = await interaction.reply({ embeds: [newsEmbed], fetchReply: true });
       } else {
-        const attachmentFile = new AttachmentBuilder(media.url, { 
-          name: media.name 
+        // Videos, audio files (sound), or spoiler-tagged media
+        const attachmentFile = new AttachmentBuilder(config.attachment.url, { 
+          name: config.attachment.name 
         });
 
-        if (media.spoiler) {
+        if (config.spoiler) {
           attachmentFile.setSpoiler(true);
         }
 
-        await interaction.reply({
+        replyMessage = await interaction.reply({
           embeds: [newsEmbed],
-          files: [attachmentFile]
+          files: [attachmentFile],
+          fetchReply: true
         });
       }
-
-      client.pendingNewsMedia.delete(interaction.user.id);
-    } else {
-      await interaction.reply({ embeds: [newsEmbed] });
-    }
-  }
-});
-
-// 4. Log into Discord
-client.login(process.env.DISCORD_TOKEN);
