@@ -36,7 +36,7 @@ app.listen(PORT, () => {
   console.log(`Euro Logistics server running on port ${PORT}`);
 });
 
-// 2. Setup Discord Bot Client
+// 2. Setup Discord Bot Client (Includes GuildMembers for role assignments)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -76,18 +76,12 @@ client.once('ready', async () => {
   }
 });
 
-// Store configured verified role ID per guild
-client.verificationRoles = new Map();
-
 // 3. Handle Interactions (/setup-verification command & button clicks)
 client.on('interactionCreate', async interaction => {
   
   // A. Execute /setup-verification
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
     const role = interaction.options.getRole('role');
-    
-    // Store role ID in memory
-    client.verificationRoles.set(interaction.guildId, role.id);
 
     const embed = {
       color: 0x53B7ED, // Euro Logistics Blue
@@ -116,7 +110,6 @@ client.on('interactionCreate', async interaction => {
     const member = interaction.member;
 
     try {
-      // Check if user already has the role
       if (member.roles.cache.has(roleId)) {
         return await interaction.reply({
           content: 'ℹ️ You are already verified in **Euro Logistics**!',
@@ -124,7 +117,6 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      // Assign the role to the user
       await member.roles.add(roleId);
 
       await interaction.reply({
@@ -134,7 +126,7 @@ client.on('interactionCreate', async interaction => {
     } catch (error) {
       console.error('Error assigning verification role:', error);
       await interaction.reply({
-        content: '❌ Failed to assign verification role. Please ensure my bot role is higher than the verified role in Server Settings!',
+        content: '❌ Failed to assign verification role. Please ensure my bot role is positioned higher than the target verified role in Server Settings!',
         ephemeral: true
       });
     }
