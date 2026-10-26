@@ -36,7 +36,7 @@ app.listen(PORT, () => {
   console.log(`Euro Logistics server running on port ${PORT}`);
 });
 
-// 2. Setup Discord Bot Client (Includes GuildMembers for role assignments)
+// 2. Setup Discord Bot Client (Requires GuildMembers intent for role management)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -52,8 +52,8 @@ const commands = [
     .setDescription('Post the Euro Logistics verification embed with button')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption(option =>
-      option.setName('role')
-        .setDescription('Role to assign to verified users')
+      option.setName('driver_role')
+        .setDescription('Select the Driver role to assign to verified users')
         .setRequired(true)
     )
 ];
@@ -81,52 +81,54 @@ client.on('interactionCreate', async interaction => {
   
   // A. Execute /setup-verification
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
-    const role = interaction.options.getRole('role');
+    const driverRole = interaction.options.getRole('driver_role');
 
     const embed = {
       color: 0x53B7ED, // Euro Logistics Blue
       title: 'Verification',
-      description: 'Welcome to **Euro Logistics VTC**!\n\nTo gain full access to our community channels, driver resources, and event updates, please verify your account below.\n\n### How to Verify:\n1. Click the **Verify** button below.\n2. Receive your verified role automatically.',
+      description: 'Welcome to **Euro Logistics VTC**!\n\nTo gain full access to our community channels, driver resources, and event updates, please verify your account below.\n\n### How to Verify:\n1. Click the **Verify** button below.\n2. Receive your **Driver** role automatically.',
       footer: {
-        text: 'Euro Logistics VTC • Security & Access System'
+        text: 'Euro Logistics VTC • Driver Access System'
       },
       timestamp: new Date().toISOString()
     };
 
     const verifyBtn = new ButtonBuilder()
-      .setCustomId(`verify_user_${role.id}`)
+      .setCustomId(`verify_driver_${driverRole.id}`)
       .setLabel('Verify')
       .setStyle(ButtonStyle.Success);
 
     const row = new ActionRowBuilder().addComponents(verifyBtn);
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: `✅ Verification panel sent! Users will receive the **${role.name}** role when clicking verify.`, ephemeral: true });
+    await interaction.reply({ content: `✅ Verification panel posted! Users will be granted the **${driverRole.name}** role upon clicking verify.`, ephemeral: true });
   }
 
   // B. Handle "Verify" Button Click
-  if (interaction.isButton() && interaction.customId.startsWith('verify_user_')) {
-    const roleId = interaction.customId.replace('verify_user_', '');
+  if (interaction.isButton() && interaction.customId.startsWith('verify_driver_')) {
+    const roleId = interaction.customId.replace('verify_driver_', '');
     const member = interaction.member;
 
     try {
+      // Check if member already has the driver role
       if (member.roles.cache.has(roleId)) {
         return await interaction.reply({
-          content: 'ℹ️ You are already verified in **Euro Logistics**!',
+          content: 'ℹ️ You are already verified and have the Driver role in **Euro Logistics**!',
           ephemeral: true
         });
       }
 
+      // Assign the Driver role to the user
       await member.roles.add(roleId);
 
       await interaction.reply({
-        content: '✅ You have successfully verified! Access granted to Euro Logistics channels.',
+        content: '✅ Verification successful! The **Driver** role has been assigned. Welcome to the fleet!',
         ephemeral: true
       });
     } catch (error) {
-      console.error('Error assigning verification role:', error);
+      console.error('Error assigning driver role:', error);
       await interaction.reply({
-        content: '❌ Failed to assign verification role. Please ensure my bot role is positioned higher than the target verified role in Server Settings!',
+        content: '❌ Failed to assign the Driver role. Please ensure my bot role is placed higher than the Driver role in Discord Server Settings > Roles!',
         ephemeral: true
       });
     }
