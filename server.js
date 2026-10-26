@@ -300,7 +300,7 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.channelId !== ALLOWED_CHANNEL_ID) {
       return interaction.reply({ 
-        content: `❌ This command can only be used in <#${ALLOWED_CHANNEL_ID}>!`, 
+        content: `❌ This command can only be used in <#${1564280861787033681}>!`, 
         ephemeral: true 
       });
     }
