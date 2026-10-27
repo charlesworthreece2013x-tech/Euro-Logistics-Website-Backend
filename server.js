@@ -42,7 +42,7 @@ const client = new Client({
 // Environment Variables (Set these in Render Dashboard)
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID; // Optional: Fast testing in single server
+const GUILD_ID = process.env.GUILD_ID; // Fast testing in your specific server
 
 // Counting State
 let currentCount = 0;
@@ -59,6 +59,9 @@ const commands = [
     .setName('setup-support')
     .setDescription('Deploy the support ticket creation panel (Admin)'),
   new SlashCommandBuilder()
+    .setName('setup-counting')
+    .setDescription('Deploy or initialize the counting game channel (Admin)'),
+  new SlashCommandBuilder()
     .setName('other')
     .setDescription('View Euro Logistics VTC information and useful links')
 ].map(command => command.toJSON());
@@ -68,11 +71,9 @@ async function registerCommands() {
   try {
     console.log('[BOT] Registering slash commands...');
     if (GUILD_ID) {
-      // Fast instant registration for your specific server
       await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
       console.log('[BOT] Guild slash commands registered successfully.');
     } else {
-      // Global registration (Takes ~1 hour to update across Discord)
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
       console.log('[BOT] Global slash commands registered successfully.');
     }
@@ -142,6 +143,19 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({ content: 'Support panel sent successfully!' });
       }
 
+      // /setup-counting
+      else if (commandName === 'setup-counting') {
+        await interaction.deferReply({ ephemeral: true });
+
+        const embed = new EmbedBuilder()
+          .setTitle('🔢 Euro Logistics VTC - Counting Game')
+          .setDescription('The counting game is ready! Start counting from **1**. Remember: no counting twice in a row!')
+          .setColor('#FF6600');
+
+        await interaction.channel.send({ embeds: [embed] });
+        await interaction.editReply({ content: 'Counting channel initialized successfully!' });
+      }
+
       // /other
       else if (commandName === 'other') {
         await interaction.deferReply();
@@ -163,12 +177,10 @@ client.on('interactionCreate', async (interaction) => {
     // B. BUTTON CLICK HANDLERS
     // --------------------------------------
     else if (interaction.isButton()) {
-      // Immediately acknowledge to avoid 3-second timeout
       await interaction.deferReply({ ephemeral: true });
 
       // Verification Button Action
       if (interaction.customId === 'btn_verify') {
-        // Optional: Auto-assign Driver or Member role
         const role = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'driver' || r.name.toLowerCase() === 'member');
         if (role) {
           await interaction.member.roles.add(role);
@@ -199,14 +211,11 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Set the exact channel name where you want the counting game to active
   if (message.channel.name === 'counting') {
     const userNumber = parseInt(message.content, 10);
 
-    // If input is not a number
     if (isNaN(userNumber)) return;
 
-    // Correct next count
     if (userNumber === currentCount + 1) {
       if (message.author.id === lastCounterId) {
         await message.react('❌');
