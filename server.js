@@ -8,7 +8,9 @@ const {
   ActionRowBuilder, 
   ButtonBuilder, 
   ButtonStyle, 
-  EmbedBuilder 
+  EmbedBuilder,
+  ChannelType,
+  PermissionFlagsBits
 } = require('discord.js');
 const express = require('express');
 
@@ -129,8 +131,8 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ ephemeral: true });
 
         const embed = new EmbedBuilder()
-          .setTitle('🛠️ Euro Logistics VTC - Support')
-          .setDescription('Need help, have questions, or applying to join? Click below to open a ticket.')
+          .setTitle('🛠️ Euro Logistics VTC - Support & Tickets')
+          .setDescription('Need help, have questions, or inquiring about your Truckline MP application? Click below to open a private ticket.')
           .setColor('#FF6600');
 
         const row = new ActionRowBuilder().addComponents(
@@ -197,34 +199,117 @@ client.on('interactionCreate', async (interaction) => {
     // B. BUTTON CLICK HANDLERS
     // --------------------------------------
     else if (interaction.isButton()) {
-      await interaction.deferReply({ ephemeral: true });
-
-      // Verification Button Action
+      // 1. VERIFICATION BUTTON
       if (interaction.customId === 'btn_verify') {
+        await interaction.deferReply({ ephemeral: true });
         try {
-          const role = interaction.guild.roles.cache.find(
-            r => r.name.toLowerCase() === 'driver' || 
-                 r.name.toLowerCase() === 'member' || 
-                 r.name.toLowerCase() === 'verified'
-          );
+          const verifiedRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
+          const driverRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'driver' || r.name.toLowerCase() === 'vtc driver');
+          
+          // Check if user already holds a VTC accepted role or if they are verified
+          // (You can also check platform database here if connected)
+          const isVtcAccepted = driverRole && interaction.member.roles.cache.has(driverRole.id);
 
-          if (role) {
-            await interaction.member.roles.add(role);
-            await interaction.editReply({ content: `✅ Verification complete! Assigned role: **${role.name}**.` });
+          let assignedRolesText = '';
+
+          if (verifiedRole) {
+            await interaction.member.roles.add(verifiedRole);
+            assignedRolesText += `**${verifiedRole.name}**`;
+          }
+
+          // If they are already accepted as a VTC member, give driver role too
+          if (isVtcAccepted && driverRole) {
+            await interaction.member.roles.add(driverRole);
+            assignedRolesText += ` and **${driverRole.name}**`;
+            await interaction.editReply({ content: `✅ Verification complete! Since you are accepted on our Truckline MP page, you have been assigned: ${assignedRolesText}.` });
           } else {
-            await interaction.editReply({ content: '✅ Verification complete! (Tip: Create a role named **"Driver"** or **"Verified"** in Server Settings to assign roles automatically).' });
+            await interaction.editReply({ content: `✅ Verification complete! You have been assigned the **Verified** role.\n*(Note: If you have been accepted on our Truckline MP VTC page, make sure your Driver role is synced or open a ticket if it's missing).*` });
           }
         } catch (roleError) {
           console.error('[ERROR] Verification Role Error:', roleError);
-          await interaction.editReply({ 
-            content: '⚠️ Verified! However, I could not assign the role. Check that the bot\'s role is placed **above** the target role in **Server Settings ➔ Roles**.' 
-          });
+          await interaction.editReply({ content: '⚠️ Verified! However, I could not assign the roles. Check bot role hierarchy in Server Settings.' });
         }
       }
 
-      // Support Ticket Button Action
+      // 2. SUPPORT TICKET CREATION BUTTON
       else if (interaction.customId === 'btn_support_ticket') {
-        await interaction.editReply({ content: '📩 Support request received! A team member will assist you shortly.' });
+        await interaction.deferReply({ ephemeral: true });
+
+        const guild = interaction.guild;
+        const member = interaction.member;
+
+        // Check if user already has an open ticket channel
+        const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${member.user.username.toLowerCase()}`);
+        if (existingChannel) {
+          return await interaction.editReply({ content: `⚠️ You already have an open ticket here: ${existingChannel}` });
+        }
+
+        try {
+          // Create a private ticket channel
+          const ticketChannel = await guild.channels.create({
+            name: `ticket-${member.user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+              {
+                id: guild.id, // Deny @everyone
+                deny: [PermissionFlagsBits.ViewChannel],
+              },
+              {
+                id: member.id, // Allow ticket opener
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+              },
+              {
+                id: client.user.id, // Allow bot
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
+              },
+            ],
+          });
+
+          const ticketEmbed = new EmbedBuilder()
+            .setTitle(`Support Ticket - ${member.user.tag}`)
+            .setDescription('Welcome! Support staff will be with you shortly.\nIf you are inquiring about your **Truckline MP VTC application**, please state your in-game name and details below.')
+            .setColor('#FF6600');
+
+          const closeRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('btn_close_ticket')
+              .setLabel('Close & Transcript')
+              .setStyle(ButtonStyle.Danger)
+              .setEmoji('🔒')
+          );
+
+          await ticketChannel.send({ content: `${member}`, embeds: [ticketEmbed], components: [closeRow] });
+          await interaction.editReply({ content: `✅ Ticket created successfully! Head over to your private channel: ${ticketChannel}` });
+        } catch (err) {
+          console.error('[ERROR] Ticket creation failed:', err);
+          await interaction.editReply({ content: '⚠️ Failed to create support ticket channel. Please check bot permissions.' });
+        }
+      }
+
+      // 3. CLOSE TICKET & TRANSCRIPT BUTTON
+      else if (interaction.customId === 'btn_close_ticket') {
+        await interaction.reply({ content: '🔒 Closing ticket and saving transcript...', ephemeral: true });
+
+        const channel = interaction.channel;
+        
+        try {
+          // Fetch recent messages for a transcript log
+          const messages = await channel.messages.fetch({ limit: 100 });
+          const transcript = messages
+            .reverse()
+            .map(m => `[${m.author.tag}]: ${m.content}`)
+            .join('\n');
+
+          console.log(`[TRANSCRIPT for ${channel.name}]:\n${transcript}`);
+
+          // Optional: Send transcript to a specific log channel if you have one, or just delete
+          setTimeout(async () => {
+            await channel.delete().catch(() => {});
+          }, 3000);
+        } catch (err) {
+          console.error('[ERROR] Closing ticket error:', err);
+          await channel.delete().catch(() => {});
+        }
       }
     }
   } catch (error) {
