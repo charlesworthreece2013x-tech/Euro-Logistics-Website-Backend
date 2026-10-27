@@ -282,21 +282,35 @@ client.on('messageCreate', async message => {
 });
 
 client.on('interactionCreate', async interaction => {
-  if (interaction.isChatInputCommand() && interaction.commandName === 'post-status') {
-    const title = interaction.options.getString('title');
-    const details = interaction.options.getString('details');
-    const channel = await client.channels.fetch('1564280861787033681').catch(() => null);
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'post-status') {
+      const title = interaction.options.getString('title');
+      const details = interaction.options.getString('details');
+      const channel = await client.channels.fetch('1564280861787033681').catch(() => null);
 
-    const embed = {
-      color: 0x53B7ED,
-      title: title,
-      description: `${details}\n\n🔗 **[View Live Instatus Page](${STATUS_PAGE_URL})**`,
-      footer: { text: `Updated by ${interaction.user.username}` },
-      timestamp: new Date().toISOString()
-    };
+      const embed = {
+        color: 0x53B7ED,
+        title: title,
+        description: `${details}\n\n🔗 **[View Live Instatus Page](${STATUS_PAGE_URL})**`,
+        footer: { text: `Updated by ${interaction.user.username}` },
+        timestamp: new Date().toISOString()
+      };
 
-    if (channel) await channel.send({ embeds: [embed] });
-    await interaction.reply({ content: `✅ Status update posted!`, ephemeral: true });
+      if (channel) await channel.send({ embeds: [embed] });
+      await interaction.reply({ content: `✅ Status update posted!`, ephemeral: true });
+    }
+
+    if (interaction.commandName === 'clear') {
+      await interaction.deferReply({ ephemeral: true });
+      const amount = interaction.options.getInteger('amount');
+      try {
+        const messages = await interaction.channel.bulkDelete(amount, true);
+        await interaction.editReply({ content: `🧹 Successfully deleted ${messages.size} messages!` });
+      } catch (error) {
+        console.error(error);
+        await interaction.editReply({ content: `❌ Failed to delete messages. Make sure they aren't older than 14 days.` });
+      }
+    }
   }
 
   if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
