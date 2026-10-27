@@ -199,9 +199,9 @@ client.on('interactionCreate', async (interaction) => {
     else if (interaction.isButton()) {
       await interaction.deferReply({ ephemeral: true });
 
+      // Verification Button Action
       if (interaction.customId === 'btn_verify') {
         try {
-          // Looks for a role named 'Driver', 'Member', or 'Verified' in your server
           const role = interaction.guild.roles.cache.find(
             r => r.name.toLowerCase() === 'driver' || 
                  r.name.toLowerCase() === 'member' || 
@@ -222,6 +222,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
+      // Support Ticket Button Action
       else if (interaction.customId === 'btn_support_ticket') {
         await interaction.editReply({ content: '📩 Support request received! A team member will assist you shortly.' });
       }
