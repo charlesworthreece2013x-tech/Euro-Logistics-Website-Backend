@@ -96,7 +96,7 @@ app.listen(PORT, () => {
 });
 
 // =========================================================================
-// 2. SETUP DISCORD BOT CLIENT (With GuildMembers, MessageContent & Presences)
+// 2. SETUP DISCORD BOT CLIENT
 // =========================================================================
 const client = new Client({
   intents: [
@@ -151,14 +151,12 @@ async function closeTicketAndDM(channel, user, reason = "Issue resolved") {
     timestamp: new Date().toISOString()
   };
 
-  // Send DM confirmation to the user
   try {
     await user.send({ embeds: [dmEmbed] });
   } catch (err) {
     console.log(`Could not DM user ${user.tag} (User DMs may be disabled).`);
   }
 
-  // Notify channel and delete after 5 seconds
   await channel.send('🔒 **Ticket finished.** Sending confirmation DM and deleting channel in 5 seconds...');
   setTimeout(async () => {
     try { await channel.delete(); } catch (e) {}
@@ -299,7 +297,7 @@ client.on('guildMemberAdd', async member => {
 });
 
 // =========================================================================
-// 4. AUTOMATED MODERATION & LINK INSPECTOR
+// 4. AUTOMATED MODERATION, LINK INSPECTOR & TICKET CLOSE TRIGGER
 // =========================================================================
 client.countingData = new Map();
 const userMessageHistory = new Map();
@@ -369,7 +367,7 @@ client.on('messageCreate', async message => {
 
   const contentLower = message.content.toLowerCase().trim();
 
-  // A. Ticket Channel Completion Listener (Only listens for completion triggers)
+  // A. Support Ticket Closure Trigger
   if (message.channel.name.startsWith('ticket-')) {
     if (contentLower === 'finished' || contentLower === 'finish' || contentLower === 'done' || contentLower === 'close') {
       await closeTicketAndDM(message.channel, message.author, "Driver marked ticket as finished.");
@@ -377,13 +375,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // B. General Channel Triggers (Using "euro logistics" or direct mention)
-  if (contentLower.includes('euro logistics') || message.mentions.has(client.user)) {
-    await message.reply('Hello! Welcome to **Euro Logistics VTC**! 🚚 Need assistance? Use `/setup-support` or open a support ticket!');
-    return;
-  }
-
-  // C. Counting Channel Logic
+  // B. Counting Channel Logic
   const countingState = client.countingData.get(message.channel.id);
   if (countingState) {
     const parsedNumber = parseInt(message.content.trim());
@@ -410,7 +402,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // D. Profanity & Word Filter Check
+  // C. Profanity & Word Filter Check
   if (BLACKLISTED_WORDS.some(word => contentLower.includes(word))) {
     try {
       await message.delete();
@@ -422,7 +414,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // E. Automated URL Inspection Engine
+  // D. Automated URL Inspection Engine
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const detectedUrls = message.content.match(urlRegex);
 
@@ -445,7 +437,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // F. Anti-Spam Protection
+  // E. Anti-Spam Protection
   const userId = message.author.id;
   const now = Date.now();
   if (!userMessageHistory.has(userId)) {
