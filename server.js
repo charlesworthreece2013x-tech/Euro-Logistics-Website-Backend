@@ -72,6 +72,19 @@ const commands = [
         .setRequired(true)
     ),
   new SlashCommandBuilder()
+    .setName('say')
+    .setDescription('Make the bot send an announcement message (Admin/Manager)')
+    .addStringOption(option =>
+      option.setName('message')
+        .setDescription('The text you want the bot to say')
+        .setRequired(true)
+    )
+    .addChannelOption(option =>
+      option.setName('channel')
+        .setDescription('Optional channel to send the message in (defaults to current)')
+        .setRequired(false)
+    ),
+  new SlashCommandBuilder()
     .setName('other')
     .setDescription('View Euro Logistics VTC information and useful links')
 ].map(command => command.toJSON());
@@ -175,6 +188,21 @@ client.on('interactionCreate', async (interaction) => {
         } catch (err) {
           console.error('[ERROR] Clear command error:', err);
           await interaction.editReply({ content: '⚠️ Failed to clear messages. Note: Discord cannot bulk-delete messages older than 14 days.' });
+        }
+      }
+
+      // /say
+      else if (commandName === 'say') {
+        await interaction.deferReply({ ephemeral: true });
+        const textMessage = interaction.options.getString('message');
+        const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+
+        try {
+          await targetChannel.send({ content: textMessage });
+          await interaction.editReply({ content: `✅ Successfully sent message to ${targetChannel}!` });
+        } catch (err) {
+          console.error('[ERROR] Say command error:', err);
+          await interaction.editReply({ content: '⚠️ Failed to send the message. Make sure I have permission to send messages in that channel.' });
         }
       }
 
