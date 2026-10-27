@@ -13,19 +13,23 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 const express = require('express');
+const path = require('path');
 
 // ==========================================
-// 1. EXPRESS KEEP-ALIVE SERVER (FOR RENDER)
+// 1. EXPRESS SERVER & WEBSITE (FOR RENDER)
 // ==========================================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Serve static website files (index.html, style.css, script.js, etc.) from the root folder[cite: 2]
+app.use(express.static(path.join(__dirname)));
+
 app.get('/', (req, res) => {
-  res.send('Euro Logistics VTC Bot is Online!');
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`[HTTP] Express server listening on port ${PORT}`);
+  console.log(`[HTTP] Express website and keep-alive listening on port ${PORT}`);
 });
 
 // ==========================================
