@@ -72,19 +72,6 @@ const commands = [
         .setRequired(true)
     ),
   new SlashCommandBuilder()
-    .setName('say')
-    .setDescription('Make the bot send an announcement message (Admin/Manager)')
-    .addStringOption(option =>
-      option.setName('message')
-        .setDescription('The text you want the bot to say')
-        .setRequired(true)
-    )
-    .addChannelOption(option =>
-      option.setName('channel')
-        .setDescription('Optional channel to send the message in (defaults to current)')
-        .setRequired(false)
-    ),
-  new SlashCommandBuilder()
     .setName('other')
     .setDescription('View Euro Logistics VTC information and useful links')
 ].map(command => command.toJSON());
@@ -188,21 +175,6 @@ client.on('interactionCreate', async (interaction) => {
         } catch (err) {
           console.error('[ERROR] Clear command error:', err);
           await interaction.editReply({ content: '⚠️ Failed to clear messages. Note: Discord cannot bulk-delete messages older than 14 days.' });
-        }
-      }
-
-      // /say
-      else if (commandName === 'say') {
-        await interaction.deferReply({ ephemeral: true });
-        const textMessage = interaction.options.getString('message');
-        const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-
-        try {
-          await targetChannel.send({ content: textMessage });
-          await interaction.editReply({ content: `✅ Successfully sent message to ${targetChannel}!` });
-        } catch (err) {
-          console.error('[ERROR] Say command error:', err);
-          await interaction.editReply({ content: '⚠️ Failed to send the message. Make sure I have permission to send messages in that channel.' });
         }
       }
 
@@ -344,11 +316,31 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // --------------------------------------
-// C. MESSAGE LISTENER (COUNTING GAME)
+// C. MESSAGE LISTENER (SAY COMMAND & COUNTING GAME)
 // --------------------------------------
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
+  // 1. PREFIX COMMAND: !say [whatever you want]
+  if (message.content.startsWith('!say')) {
+    const sayContent = message.content.slice(4).trim();
+
+    if (!sayContent) {
+      return message.reply('⚠️ Please provide a message to say. Usage: `!say [message]`');
+    }
+
+    try {
+      // Delete the original message from the user
+      await message.delete().catch(() => {});
+      // Send the content as the bot
+      await message.channel.send({ content: sayContent });
+    } catch (err) {
+      console.error('[ERROR] Prefix !say error:', err);
+    }
+    return;
+  }
+
+  // 2. COUNTING GAME
   if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
     const userNumber = parseInt(message.content.trim(), 10);
 
