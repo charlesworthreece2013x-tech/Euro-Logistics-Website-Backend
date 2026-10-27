@@ -140,26 +140,26 @@ async function getAvailableStaff(guild) {
 }
 
 /**
- * Helper function to close ticket and send confirmation DM to driver
+ * Helper function to close ticket and send completion DM to driver
  */
 async function closeTicketAndDM(channel, user, reason = "Issue resolved") {
   const dmEmbed = {
     color: 0x57F287,
     title: '✅ Support Ticket Closed — Euro Logistics VTC',
-    description: `Hello ${user}, your support ticket (\`${channel.name}\`) has been successfully closed and marked as finished.\n\n**Reason:** ${reason}\n\nThank you for reaching out to **Euro Logistics VTC**! If you ever need help again, feel free to open another ticket anytime.`,
-    footer: { text: 'Euro Logistics VTC • Automated Ticket System' },
+    description: `Hello ${user}, your support ticket (\`${channel.name}\`) has been successfully closed and marked as completed.\n\n**Reason:** ${reason}\n\nThank you for reaching out to **Euro Logistics VTC**! If you ever need help again, feel free to open another ticket anytime.`,
+    footer: { text: 'Euro Logistics VTC • Support Ticket System' },
     timestamp: new Date().toISOString()
   };
 
-  // Send DM to the user
+  // Send DM confirmation to the user
   try {
     await user.send({ embeds: [dmEmbed] });
   } catch (err) {
-    console.log(`Could not DM user ${user.tag} (DMs might be disabled).`);
+    console.log(`Could not DM user ${user.tag} (User DMs may be disabled).`);
   }
 
-  // Send closing message in channel and delete after 5 seconds
-  await channel.send('🔒 **Ticket is marked as finished.** Direct Messaging confirmation to user and deleting channel in 5 seconds...');
+  // Notify channel and delete after 5 seconds
+  await channel.send('🔒 **Ticket finished.** Sending confirmation DM and deleting channel in 5 seconds...');
   setTimeout(async () => {
     try { await channel.delete(); } catch (e) {}
   }, 5000);
@@ -299,7 +299,7 @@ client.on('guildMemberAdd', async member => {
 });
 
 // =========================================================================
-// 4. AUTOMATED MODERATION, LINK INSPECTOR & INTERACTIVE CHAT BOT ENGINE
+// 4. AUTOMATED MODERATION & LINK INSPECTOR
 // =========================================================================
 client.countingData = new Map();
 const userMessageHistory = new Map();
@@ -369,44 +369,10 @@ client.on('messageCreate', async message => {
 
   const contentLower = message.content.toLowerCase().trim();
 
-  // =======================================================================
-  // A. INTERACTIVE 24/7 SUPPORT TICKET BOT CONVERSATION ENGINE
-  // =======================================================================
+  // A. Ticket Channel Completion Listener (Only listens for completion triggers)
   if (message.channel.name.startsWith('ticket-')) {
-    const activeStaff = await getAvailableStaff(message.guild);
-
-    // Check if user wants to finish/close the ticket
     if (contentLower === 'finished' || contentLower === 'finish' || contentLower === 'done' || contentLower === 'close') {
-      await closeTicketAndDM(message.channel, message.author, "User indicated ticket was finished.");
-      return;
-    }
-
-    // Interactive Assistant replies when staff are offline
-    if (activeStaff.size === 0) {
-      message.channel.sendTyping();
-
-      setTimeout(async () => {
-        // Casual / Greetings
-        if (contentLower.includes('how are you') || contentLower.includes('how r u') || contentLower.includes('how you doing')) {
-          await message.reply("🤖 **Euro Logistics Assistant:** I'm doing great, thank you! Ready to help you get back on the road. What can I assist you with today?");
-        } else if (contentLower.includes('hello') || contentLower.includes('hi') || contentLower.includes('hey')) {
-          await message.reply(`🤖 **Euro Logistics Assistant:** Hey there ${message.author.username}! How can I help you in your support ticket? Type your question or type **finished** when you're done!`);
-        
-        // Topic-based intelligent responses
-        } else if (contentLower.includes('telemetry') || contentLower.includes('miles') || contentLower.includes('stats') || contentLower.includes('track')) {
-          await message.reply('🤖 **Euro Logistics Assistant:** You can view live fleet stats and tracked miles using `/leaderboard` or `/fleet-status`. If your telemetry isn\'t logging, make sure TrucklineMP is running in the background while driving!');
-        } else if (contentLower.includes('convoy') || contentLower.includes('event') || contentLower.includes('halloween') || contentLower.includes('route')) {
-          await message.reply('🤖 **Euro Logistics Assistant:** Check our official announcements channel for convoy schedules and route information. Remember to drive safely and maintain convoy spacing!');
-        } else if (contentLower.includes('verify') || contentLower.includes('role') || contentLower.includes('rank')) {
-          await message.reply('🤖 **Euro Logistics Assistant:** Role verification is automatic! Click the **Verify** button in the verification channel to claim your **Verified** and **Driver** roles.');
-        } else if (contentLower.includes('thank') || contentLower.includes('thx') || contentLower.includes('ty')) {
-          await message.reply('🤖 **Euro Logistics Assistant:** You\'re very welcome! If you are all set, just type **finished** to close this ticket.');
-        
-        // Fallback for general text
-        } else {
-          await message.reply(`🤖 **Euro Logistics Assistant:** Got it! I've noted that down. If you have more details to add, keep typing. Once you are completely done, reply with **finished** to close the ticket and receive your summary DM!`);
-        }
-      }, 1200);
+      await closeTicketAndDM(message.channel, message.author, "Driver marked ticket as finished.");
       return;
     }
   }
@@ -568,7 +534,7 @@ client.on('interactionCreate', async interaction => {
         const embed = {
           color: 0xED4245,
           title: '🔴 Staff Availability Status',
-          description: 'No moderators or managers are currently active.\n\n*Our 24/7 Automated Bot System is active! You can still open a ticket using the ticket panel and leave your details.*',
+          description: 'No moderators or managers are currently active.\n\n*Our 24/7 Automated Ticket System is active! You can still open a ticket using the ticket panel and leave your details.*',
           footer: { text: 'Euro Logistics VTC • Staff Availability Check' },
           timestamp: new Date().toISOString()
         };
@@ -745,7 +711,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // Support Ticket Creation (Zero Latency via Immediate Deferral)
+  // Support Ticket Creation
   if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
     await interaction.deferReply({ ephemeral: true });
 
@@ -773,16 +739,16 @@ client.on('interactionCreate', async interaction => {
 
       if (activeStaff.size > 0) {
         const staffNames = activeStaff.map(m => m.displayName).join(', ');
-        ticketDescription = `Hello ${user}, welcome to your support ticket!\n\n🟢 **Active Staff Online:** ${staffNames}\nOur team has been notified and will assist you shortly. Please describe your issue below.\n\n*When you are done, reply with **finished** or click Close Ticket below.*`;
+        ticketDescription = `Hello ${user}, welcome to your support ticket!\n\n🟢 **Active Staff Online:** ${staffNames}\nOur staff team has been notified and will assist you shortly. Please write down your issue below.\n\n*When you are finished, reply with **finished** or click Close Ticket.*`;
       } else {
-        ticketDescription = `Hello ${user}! 👋 **No staff members are currently online, but I am your 24/7 Euro Logistics Assistant.**\n\nI am here to chat and log your issue right now! Feel free to talk to me or ask questions below:\n\n• **Telemetry & Driver Stats**\n• **Convoys & Event Planning**\n• **VTC Account Verification**\n\n*When your question is resolved, type **finished** to close this ticket and receive your DM confirmation!*`;
+        ticketDescription = `Hello ${user}! 👋 Welcome to your support ticket.\n\nNo staff members are currently online, but your ticket has been logged! Please detail your question below:\n\n• **Telemetry & Driver Stats**\n• **Convoys & Event Planning**\n• **VTC Account Verification**\n\n*When you are done, reply with **finished** to close this ticket and receive your confirmation DM!*`;
       }
 
       const ticketEmbed = {
         color: 0x53B7ED,
         title: `🎫 Support Ticket — ${user.username}`,
         description: ticketDescription,
-        footer: { text: 'Euro Logistics VTC • 24/7 Interactive Support System' },
+        footer: { text: 'Euro Logistics VTC • Support Ticket System' },
         timestamp: new Date().toISOString()
       };
 
