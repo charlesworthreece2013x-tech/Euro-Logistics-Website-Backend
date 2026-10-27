@@ -21,7 +21,21 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static website files (index.html, style.css, script.js, etc.) from the root folder[cite: 2]
+// API Endpoint for Fleet Telemetry Stats (Matches your script.js fetch request)
+app.get('/api/fleet-stats', (req, res) => {
+    res.json({
+        status: "ONLINE",
+        activeDrivers: 3,
+        totalMiles: 31750,
+        drivers: [
+            { name: "Euro Logistics", rank: "VTC Owner", miles: 18450, status: "On Duty" },
+            { name: "Alpha_Hauler", rank: "Senior Driver", miles: 9200, status: "Driving ETS2" },
+            { name: "Nordic_Trucker", rank: "Fleet Driver", miles: 4100, status: "In Convoy" }
+        ]
+    });
+});
+
+// Serve static website files (index.html, style.css, script.js, etc.) from the root folder
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
@@ -29,7 +43,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[HTTP] Express website and keep-alive listening on port ${PORT}`);
+  console.log(`[HTTP] Express website and telemetry API listening on port ${PORT}`);
 });
 
 // ==========================================
