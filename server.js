@@ -172,7 +172,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.editReply({ content: `✅ Successfully cleared **${amount}** messages!` });
         } catch (err) {
           console.error('[ERROR] Clear command error:', err);
-          await interaction.editReply({ content: '⚠️ Failed to clear messages. (Note: Discord cannot bulk-delete messages older than 14 days).' });
+          await interaction.editReply({ content: '⚠️ Failed to clear messages. Note: Discord cannot bulk-delete messages older than 14 days.' });
         }
       }
 
@@ -201,6 +201,7 @@ client.on('interactionCreate', async (interaction) => {
 
       if (interaction.customId === 'btn_verify') {
         try {
+          // Looks for a role named 'Driver', 'Member', or 'Verified' in your server
           const role = interaction.guild.roles.cache.find(
             r => r.name.toLowerCase() === 'driver' || 
                  r.name.toLowerCase() === 'member' || 
@@ -211,11 +212,13 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.member.roles.add(role);
             await interaction.editReply({ content: `✅ Verification complete! Assigned role: **${role.name}**.` });
           } else {
-            await interaction.editReply({ content: '✅ You are verified! (Tip: Create a role named "Driver" in Server Settings to auto-assign it here).' });
+            await interaction.editReply({ content: '✅ Verification complete! (Tip: Create a role named **"Driver"** or **"Verified"** in Server Settings to assign roles automatically).' });
           }
         } catch (roleError) {
-          console.error('[ERROR] Role assignment failed:', roleError);
-          await interaction.editReply({ content: '⚠️ Verified, but could not assign the role. Make sure the bot role is placed **above** the target role in Server Settings ➔ Roles.' });
+          console.error('[ERROR] Verification Role Error:', roleError);
+          await interaction.editReply({ 
+            content: '⚠️ Verified! However, I could not assign the role. Check that the bot\'s role is placed **above** the target role in **Server Settings ➔ Roles**.' 
+          });
         }
       }
 
@@ -226,7 +229,7 @@ client.on('interactionCreate', async (interaction) => {
   } catch (error) {
     console.error('[ERROR] Interaction handling error:', error);
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: '⚠️ An error occurred while processing this command.' }).catch(() => {});
+      await interaction.editReply({ content: '⚠️ An error occurred while processing this request.' }).catch(() => {});
     } else {
       await interaction.reply({ content: '⚠️ An error occurred.', ephemeral: true }).catch(() => {});
     }
