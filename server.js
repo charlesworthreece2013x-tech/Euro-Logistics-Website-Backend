@@ -15,7 +15,7 @@ const {
   ChannelType
 } = require('discord.js');
 
-// Replace with your actual Instatus page URL
+// Your external Instatus page URL
 const STATUS_PAGE_URL = process.env.STATUS_PAGE_URL || 'https://euro-logistics.instatus.com';
 
 // =========================================================================
@@ -332,7 +332,7 @@ client.on('interactionCreate', async interaction => {
       timestamp: new Date().toISOString()
     };
 
-    const closeBtn = new ButtonBuilder().setCustomId('create_support_ticket').setLabel('Close Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒');
+    const closeBtn = new ButtonBuilder().setCustomId('close_support_ticket').setLabel('Close Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒');
     const row = new ActionRowBuilder().addComponents(closeBtn);
 
     await ticketChannel.send({ content: `${user}`, embeds: [ticketEmbed], components: [row] });
