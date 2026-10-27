@@ -181,24 +181,37 @@ client.on('interactionCreate', async (interaction) => {
 
       // Verification Button Action
       if (interaction.customId === 'btn_verify') {
-        const role = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'driver' || r.name.toLowerCase() === 'member');
-        if (role) {
-          await interaction.member.roles.add(role);
-          await interaction.editReply({ content: `Verification complete! Assigned role: **${role.name}**.` });
-        } else {
-          await interaction.editReply({ content: 'Verification complete! (Tip: Create a "Driver" role in Discord to auto-assign).' });
+        try {
+          // Look for 'Driver', 'Member', or 'Verified' role in your server
+          const role = interaction.guild.roles.cache.find(
+            r => r.name.toLowerCase() === 'driver' || 
+                 r.name.toLowerCase() === 'member' || 
+                 r.name.toLowerCase() === 'verified'
+          );
+
+          if (role) {
+            await interaction.member.roles.add(role);
+            await interaction.editReply({ content: `✅ Verification complete! Assigned role: **${role.name}**.` });
+          } else {
+            await interaction.editReply({ content: '✅ You are verified! (Note: To automatically assign a role, create a role named "Driver" or "Verified" in your Server Settings).' });
+          }
+        } catch (roleError) {
+          console.error('[ERROR] Verification Role Error:', roleError);
+          await interaction.editReply({ 
+            content: '⚠️ Verified! However, I could not assign the role. Please check that the bot\'s role is placed ABOVE the Driver/Verified role in **Server Settings ➔ Roles**.' 
+          });
         }
       }
 
       // Support Ticket Action
       else if (interaction.customId === 'btn_support_ticket') {
-        await interaction.editReply({ content: 'Support request received! A team member will assist you shortly.' });
+        await interaction.editReply({ content: '📩 Support request received! A team member will assist you shortly.' });
       }
     }
   } catch (error) {
     console.error('[ERROR] Interaction execution error:', error);
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: 'An unexpected error occurred while running this command.' }).catch(() => {});
+      await interaction.editReply({ content: 'An unexpected error occurred while processing your request.' }).catch(() => {});
     } else {
       await interaction.reply({ content: 'An unexpected error occurred.', ephemeral: true }).catch(() => {});
     }
@@ -211,28 +224,33 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  if (message.channel.name === 'counting') {
-    const userNumber = parseInt(message.content, 10);
+  // Trigger on any channel named 'counting' or containing 'counting'
+  if (message.channel.name.toLowerCase().includes('counting')) {
+    const userNumber = parseInt(message.content.trim(), 10);
 
     if (isNaN(userNumber)) return;
 
-    if (userNumber === currentCount + 1) {
-      if (message.author.id === lastCounterId) {
-        await message.react('❌');
-        await message.reply('You cannot count twice in a row! Count reset to **0**.');
+    try {
+      if (userNumber === currentCount + 1) {
+        if (message.author.id === lastCounterId) {
+          await message.react('❌').catch(() => {});
+          await message.reply('You cannot count twice in a row! Count reset to **0**.');
+          currentCount = 0;
+          lastCounterId = null;
+          return;
+        }
+
+        currentCount++;
+        lastCounterId = message.author.id;
+        await message.react('✅').catch(err => console.error('[ERROR] Failed to react:', err));
+      } else {
+        await message.react('❌').catch(() => {});
+        await message.reply(`Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
         currentCount = 0;
         lastCounterId = null;
-        return;
       }
-
-      currentCount++;
-      lastCounterId = message.author.id;
-      await message.react('✅');
-    } else {
-      await message.react('❌');
-      await message.reply(`Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
-      currentCount = 0;
-      lastCounterId = null;
+    } catch (err) {
+      console.error('[ERROR] Counting logic error:', err);
     }
   }
 });
