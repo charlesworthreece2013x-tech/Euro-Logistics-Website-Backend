@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 10000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Telemetry API Endpoint integrated with TrucklineMP live map API
+// Dynamic Telemetry API Endpoint integrated with TrucklineMP live map API
 app.get('/api/fleet-stats', async (req, res) => {
   const targetPlayer = 'transit'; // Your in-game profile name
 
@@ -103,8 +103,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, // Required for bot to read messages & reply
-    GatewayIntentBits.GuildPresences // Required to detect online/offline staff status
+    GatewayIntentBits.MessageContent, // Required for reading text content & replying
+    GatewayIntentBits.GuildPresences // Required for checking online/offline staff status
   ]
 });
 
@@ -431,7 +431,7 @@ client.on('messageCreate', async message => {
 });
 
 // =========================================================================
-// 5. SLASH COMMANDS & TICKET INTERACTIONS (WITH STAFF DETECTION)
+// 5. SLASH COMMANDS & TICKET INTERACTIONS (WITH 24/7 BOT ASSISTANT)
 // =========================================================================
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
@@ -469,7 +469,7 @@ client.on('interactionCreate', async interaction => {
     const supportEmbed = {
       color: 0x53B7ED,
       title: '🎫 Euro Logistics • Support Desk',
-      description: 'Need assistance with your driver application, telemetry, convoys, or community questions? \n\nClick the **Create Ticket** button below to open a private support channel with our management team.',
+      description: 'Need assistance with your driver application, telemetry, convoys, or community questions? \n\nClick the **Create Ticket** button below to open a private support channel.',
       footer: { text: 'Euro Logistics VTC • Ticket Support System' },
       timestamp: new Date().toISOString()
     };
@@ -486,7 +486,6 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ content: `✅ Support ticket panel successfully posted to <#${targetChannel.id}>!`, ephemeral: true });
   }
 
-  // Staff Status Command
   if (interaction.isChatInputCommand() && interaction.commandName === 'staff-status') {
     await interaction.deferReply();
     try {
@@ -673,7 +672,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // Support Ticket Creation with Automatic Staff Presence Detection
+  // Support Ticket Creation with Interactive 24/7 Bot Assistant
   if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
     await interaction.deferReply({ ephemeral: true });
     const guild = interaction.guild;
@@ -697,20 +696,20 @@ client.on('interactionCreate', async interaction => {
 
       // Check live staff presence
       const activeStaff = await getAvailableStaff(guild);
-      let staffNotice = "";
+      let ticketDescription = "";
 
       if (activeStaff.size > 0) {
         const staffNames = activeStaff.map(m => m.displayName).join(', ');
-        staffNotice = `🟢 **Available Staff Online:** ${staffNames}\n*Our team has been notified and will assist you shortly.*`;
+        ticketDescription = `Hello ${user}, welcome to your support ticket!\n\n🟢 **Active Staff Online:** ${staffNames}\nOur team has been notified and will assist you shortly. Please describe your issue below.`;
       } else {
-        staffNotice = `🤖 **24/7 Bot Notice:** No management or moderators are currently online.\n*Your ticket is open! Please leave your details, and staff will review it as soon as they log on.*`;
+        ticketDescription = `Hello ${user}! 👋 **No staff members are currently online, but I am your 24/7 Euro Logistics Assistant.**\n\nI am here to take down your issue right now! Please type out your question or issue below:\n\n• **Telemetry / Driver Stats Help**\n• **Convoy & Event Info**\n• **VTC Verification Questions**\n\nI will log your details, and as soon as a Moderator or Manager logs on, they will review this ticket!`;
       }
 
       const ticketEmbed = {
         color: 0x53B7ED,
         title: `🎫 Support Ticket — ${user.username}`,
-        description: `Hello ${user}, welcome to your support ticket!\n\n${staffNotice}\n\n**Please describe your question or issue below.** When finished, click **Close Ticket**.`,
-        footer: { text: 'Euro Logistics VTC • 24/7 Automated Support System' },
+        description: ticketDescription,
+        footer: { text: 'Euro Logistics VTC • 24/7 Virtual Support System' },
         timestamp: new Date().toISOString()
       };
 
