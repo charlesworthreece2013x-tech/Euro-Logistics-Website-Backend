@@ -46,7 +46,7 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID || '1564236424155373568';
 
-// Counting State
+// Counting Game State
 let currentCount = 0;
 let lastCounterId = null;
 
@@ -206,8 +206,6 @@ client.on('interactionCreate', async (interaction) => {
           const verifiedRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
           const driverRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'driver' || r.name.toLowerCase() === 'vtc driver');
           
-          // Check if user already holds a VTC accepted role or if they are verified
-          // (You can also check platform database here if connected)
           const isVtcAccepted = driverRole && interaction.member.roles.cache.has(driverRole.id);
 
           let assignedRolesText = '';
@@ -217,7 +215,6 @@ client.on('interactionCreate', async (interaction) => {
             assignedRolesText += `**${verifiedRole.name}**`;
           }
 
-          // If they are already accepted as a VTC member, give driver role too
           if (isVtcAccepted && driverRole) {
             await interaction.member.roles.add(driverRole);
             assignedRolesText += ` and **${driverRole.name}**`;
@@ -238,28 +235,26 @@ client.on('interactionCreate', async (interaction) => {
         const guild = interaction.guild;
         const member = interaction.member;
 
-        // Check if user already has an open ticket channel
         const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${member.user.username.toLowerCase()}`);
         if (existingChannel) {
           return await interaction.editReply({ content: `⚠️ You already have an open ticket here: ${existingChannel}` });
         }
 
         try {
-          // Create a private ticket channel
           const ticketChannel = await guild.channels.create({
             name: `ticket-${member.user.username}`,
             type: ChannelType.GuildText,
             permissionOverwrites: [
               {
-                id: guild.id, // Deny @everyone
+                id: guild.id,
                 deny: [PermissionFlagsBits.ViewChannel],
               },
               {
-                id: member.id, // Allow ticket opener
+                id: member.id,
                 allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
               },
               {
-                id: client.user.id, // Allow bot
+                id: client.user.id,
                 allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
               },
             ],
@@ -293,7 +288,6 @@ client.on('interactionCreate', async (interaction) => {
         const channel = interaction.channel;
         
         try {
-          // Fetch recent messages for a transcript log
           const messages = await channel.messages.fetch({ limit: 100 });
           const transcript = messages
             .reverse()
@@ -302,63 +296,9 @@ client.on('interactionCreate', async (interaction) => {
 
           console.log(`[TRANSCRIPT for ${channel.name}]:\n${transcript}`);
 
-          // Optional: Send transcript to a specific log channel if you have one, or just delete
           setTimeout(async () => {
             await channel.delete().catch(() => {});
           }, 3000);
         } catch (err) {
           console.error('[ERROR] Closing ticket error:', err);
           await channel.delete().catch(() => {});
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[ERROR] Interaction handling error:', error);
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: '⚠️ An error occurred while processing this request.' }).catch(() => {});
-    } else {
-      await interaction.reply({ content: '⚠️ An error occurred.', ephemeral: true }).catch(() => {});
-    }
-  }
-});
-
-// --------------------------------------
-// C. MESSAGE LISTENER (COUNTING GAME)
-// --------------------------------------
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-
-  if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
-    const userNumber = parseInt(message.content.trim(), 10);
-
-    if (isNaN(userNumber)) return;
-
-    try {
-      if (userNumber === currentCount + 1) {
-        if (message.author.id === lastCounterId) {
-          await message.react('❌').catch(() => {});
-          await message.reply('❌ You cannot count twice in a row! Count reset to **0**.');
-          currentCount = 0;
-          lastCounterId = null;
-          return;
-        }
-
-        currentCount++;
-        lastCounterId = message.author.id;
-        await message.react('✅').catch(() => {});
-      } else {
-        await message.react('❌').catch(() => {});
-        await message.reply(`❌ Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
-        currentCount = 0;
-        lastCounterId = null;
-      }
-    } catch (err) {
-      console.error('[ERROR] Counting error:', err);
-    }
-  }
-});
-
-// ==========================================
-// 5. START BOT
-// ==========================================
-client.login(TOKEN);
