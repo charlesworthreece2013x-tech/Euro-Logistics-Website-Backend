@@ -42,7 +42,7 @@ const client = new Client({
 // Environment Variables from Render Dashboard
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID || '1564236424155373568'; // Fallback to your server ID
+const GUILD_ID = process.env.GUILD_ID || '1564236424155373568';
 
 // Counting State
 let currentCount = 0;
@@ -61,6 +61,14 @@ const commands = [
   new SlashCommandBuilder()
     .setName('setup-counting')
     .setDescription('Deploy or initialize the counting game channel (Admin)'),
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('Delete a specified number of messages from the channel (Admin)')
+    .addIntegerOption(option => 
+      option.setName('amount')
+        .setDescription('Number of messages to clear (1-100)')
+        .setRequired(true)
+    ),
   new SlashCommandBuilder()
     .setName('other')
     .setDescription('View Euro Logistics VTC information and useful links')
@@ -150,6 +158,24 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({ content: '✅ Counting panel deployed successfully!' });
       }
 
+      // /clear
+      else if (commandName === 'clear') {
+        await interaction.deferReply({ ephemeral: true });
+        const amount = interaction.options.getInteger('amount');
+
+        if (amount < 1 || amount > 100) {
+          return await interaction.editReply({ content: '⚠️ Please specify a number between 1 and 100.' });
+        }
+
+        try {
+          await interaction.channel.bulkDelete(amount, true);
+          await interaction.editReply({ content: `✅ Successfully cleared **${amount}** messages!` });
+        } catch (err) {
+          console.error('[ERROR] Clear command error:', err);
+          await interaction.editReply({ content: '⚠️ Failed to clear messages. (Note: Discord cannot bulk-delete messages older than 14 days).' });
+        }
+      }
+
       // /other
       else if (commandName === 'other') {
         await interaction.deferReply({ ephemeral: true });
@@ -173,7 +199,6 @@ client.on('interactionCreate', async (interaction) => {
     else if (interaction.isButton()) {
       await interaction.deferReply({ ephemeral: true });
 
-      // Verification Button Action
       if (interaction.customId === 'btn_verify') {
         try {
           const role = interaction.guild.roles.cache.find(
@@ -194,7 +219,6 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      // Support Ticket Action
       else if (interaction.customId === 'btn_support_ticket') {
         await interaction.editReply({ content: '📩 Support request received! A team member will assist you shortly.' });
       }
@@ -215,7 +239,6 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Triggers if the channel name includes "counting"
   if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
     const userNumber = parseInt(message.content.trim(), 10);
 
