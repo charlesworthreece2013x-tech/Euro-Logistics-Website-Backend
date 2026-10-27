@@ -321,44 +321,31 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // 1. PREFIX COMMAND: !say [message]
+  // 1. PREFIX COMMAND: !say [message] (Supports uploaded file attachments)
   if (message.content.startsWith('!say')) {
-    const fullText = message.content.slice(4).trim();
-    const hasAttachments = message.attachments.size > 0;
+    const textContent = message.content.slice(4).trim();
+    const attachments = Array.from(message.attachments.values());
 
-    if (!fullText && !hasAttachments) {
-      return message.reply('⚠️ Please provide text or attach an image. Usage: `!say [message]`');
+    if (!textContent && attachments.length === 0) {
+      return message.reply('⚠️ Please provide a message or attach a file. Usage: `!say [message]`');
     }
 
     try {
       const payload = {};
 
-      // Handle attached image files (places image underneath or alongside attached message)
-      if (hasAttachments) {
-        payload.files = Array.from(message.attachments.values()).map(att => att.url);
+      if (textContent) {
+        payload.content = textContent;
       }
 
-      // Check if user separated text and an image URL using "|" symbol (e.g. !say Check this out | https://image.png)
-      if (fullText.includes('|')) {
-        const parts = fullText.split('|');
-        const textPart = parts[0].trim();
-        const imageUrl = parts[1].trim();
-
-        if (textPart) payload.content = textPart;
-
-        const imageEmbed = new EmbedBuilder()
-          .setColor('#FF6600')
-          .setImage(imageUrl);
-
-        payload.embeds = [imageEmbed];
-      } else if (fullText) {
-        payload.content = fullText;
+      // Pass attached files directly through the bot
+      if (attachments.length > 0) {
+        payload.files = attachments.map(att => att.url);
       }
 
       // Delete user's trigger message
       await message.delete().catch(() => {});
 
-      // Send output as bot
+      // Send the payload through the bot
       await message.channel.send(payload);
     } catch (err) {
       console.error('[ERROR] Prefix !say error:', err);
