@@ -14,26 +14,24 @@ const {
   ChannelType
 } = require('discord.js');
 
-// 1. Setup Express Web Server (Website, Root Static Files & Fleet Telemetry API)
+// =========================================================================
+// 1. SETUP EXPRESS WEB SERVER (Website, Static Files & Fleet Telemetry API)
+// =========================================================================
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Parse JSON bodies for API routes
 app.use(express.json());
-
-// Serve static frontend files (HTML, CSS, JS, images) directly from the root folder
 app.use(express.static(path.join(__dirname)));
 
-// Dynamic Telemetry API Endpoint integrated with TrucklineMP live map API
+// Telemetry API Endpoint integrated with TrucklineMP live map API
 app.get('/api/fleet-stats', async (req, res) => {
-  const targetPlayer = 'transit'; // Your exact in-game profile name
+  const targetPlayer = 'transit'; // Your in-game profile name
 
   try {
     let isOnline = false;
     let serverName = 'Europe Traffic';
     let loggedMiles = 544;
 
-    // Fetch live map player search endpoint
     const mapResponse = await fetch(`https://api.trucklinemp.com/v1/map/players?search=${encodeURIComponent(targetPlayer)}`, {
       headers: { 
         'User-Agent': 'EuroLogisticsVTC-Web/1.0',
@@ -44,7 +42,6 @@ app.get('/api/fleet-stats', async (req, res) => {
     if (mapResponse.ok) {
       const data = await mapResponse.json();
       
-      // Look for your specific player profile in the API results array
       const playerSession = Array.isArray(data) 
         ? data.find(p => p.username && p.username.toLowerCase() === targetPlayer.toLowerCase())
         : (data.username && data.username.toLowerCase() === targetPlayer.toLowerCase() ? data : null);
@@ -86,12 +83,10 @@ app.get('/api/fleet-stats', async (req, res) => {
   }
 });
 
-// Route the root URL to serve your main website frontend (index.html)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Catch-all fallback route to support page navigation
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -100,15 +95,44 @@ app.listen(PORT, () => {
   console.log(`Euro Logistics server running on port ${PORT}`);
 });
 
-// 2. Setup Discord Bot Client (With GuildMembers intent required for welcoming)
+// =========================================================================
+// 2. SETUP DISCORD BOT CLIENT (With GuildMembers, MessageContent & Presences)
+// =========================================================================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent, // Required for bot to read messages & reply
+    GatewayIntentBits.GuildPresences // Required to detect online/offline staff status
   ]
 });
+
+// Target Staff Roles for Support & Availability Checks
+const STAFF_ROLE_NAMES = [
+  'VTC Owner',
+  'Operations Manager',
+  'Community Manager',
+  'Senior Moderator',
+  'Moderator'
+];
+
+/**
+ * Helper function to find active/online staff members in the guild
+ */
+async function getAvailableStaff(guild) {
+  const members = await guild.members.fetch({ withPresences: true });
+
+  return members.filter(member => {
+    if (member.user.bot) return false;
+
+    const hasStaffRole = member.roles.cache.some(role => STAFF_ROLE_NAMES.includes(role.name));
+    const status = member.presence?.status;
+    const isOnline = status && status !== 'offline';
+
+    return hasStaffRole && isOnline;
+  });
+}
 
 // Slash Command definitions
 const commands = [
@@ -134,6 +158,9 @@ const commands = [
     .setName('setup-support')
     .setDescription('Post the official Euro Logistics ticket support panel')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder()
+    .setName('staff-status')
+    .setDescription('Check which management and moderation staff members are currently online'),
   new SlashCommandBuilder()
     .setName('leaderboard')
     .setDescription('View top drivers ranked by miles grabbed from website telemetry'),
@@ -188,7 +215,6 @@ const commands = [
     )
 ];
 
-// Register slash commands and set online presence on startup
 client.once('ready', async () => {
   console.log(`Euro Logistics Bot is online as ${client.user.tag}!`);
 
@@ -211,7 +237,9 @@ client.once('ready', async () => {
   }
 });
 
-// 3. Custom Welcome System
+// =========================================================================
+// 3. CUSTOM WELCOME SYSTEM
+// =========================================================================
 client.on('guildMemberAdd', async member => {
   const WELCOME_CHANNEL_ID = '1564304871203541072';
   const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
@@ -239,45 +267,38 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
-// 4. Systems Memory & Advanced Moderation Filters (With HTTP Link Inspector)
+// =========================================================================
+// 4. AUTOMATED MODERATION, LINK INSPECTOR & TEXT RESPONSES
+// =========================================================================
 client.countingData = new Map();
 const userMessageHistory = new Map();
 
-// Word Blacklist
 const BLACKLISTED_WORDS = [
   'fuck', 'shit', 'bitch', 'cunt', 'asshole', 'dick', 'pussy',
   't.me/', 'badword1', 'badword2'
 ];
 
-// High-Risk Malicious / Phishing Domains
 const BLACKLISTED_DOMAINS = [
   'discord-app.info', 'discord-nitro.click', 'steamcommunitly.com', 
   'free-nitro.ru', 'dl-discord.net', 'gift-discord.com'
 ];
 
-// Dangerous file extensions to block upon URL check
 const DANGEROUS_EXTENSIONS = ['.exe', '.scr', '.bat', '.cmd', '.vbs', '.apk', '.jar', '.ps1'];
 
-/**
- * Link Inspector Function: Simulates "clicking" a URL to check headers & safety
- */
 async function inspectUrlSafety(targetUrl) {
   try {
     const parsedUrl = new URL(targetUrl);
     const domain = parsedUrl.hostname.toLowerCase();
 
-    // 1. Direct Domain Blacklist Check
     if (BLACKLISTED_DOMAINS.some(badDomain => domain.includes(badDomain))) {
       return { safe: false, reason: 'Known malicious domain pattern detected.' };
     }
 
-    // 2. Direct IP Address Host Check
     const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
     if (ipPattern.test(domain)) {
       return { safe: false, reason: 'Direct IP address links are restricted for security.' };
     }
 
-    // 3. HTTP Request Check (Follow redirects & examine final response headers)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
 
@@ -317,9 +338,9 @@ client.on('messageCreate', async message => {
 
   const contentLower = message.content.toLowerCase();
 
-  // A. Custom Text Trigger: "euro logistics hi"
-  if (contentLower.includes('euro logistics hi')) {
-    await message.reply('Hello! Welcome to **Euro Logistics VTC**! 🚚 Let us know if you need any help out on the road.');
+  // A. Custom Text Triggers
+  if (contentLower.includes('euro logistics hi') || contentLower === 'hi euro logistics') {
+    await message.reply('Hello! Welcome to **Euro Logistics VTC**! 🚚 How can we assist you today?');
     return;
   }
 
@@ -385,7 +406,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // E. Anti-Spam / Anti-Flood Protection
+  // E. Anti-Spam Protection
   const userId = message.author.id;
   const now = Date.now();
   if (!userMessageHistory.has(userId)) {
@@ -409,7 +430,9 @@ client.on('messageCreate', async message => {
   }
 });
 
-// 5. Handle Interactions & Slash Commands
+// =========================================================================
+// 5. SLASH COMMANDS & TICKET INTERACTIONS (WITH STAFF DETECTION)
+// =========================================================================
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-verification') {
     const verifiedRole = interaction.options.getRole('verified_role');
@@ -461,6 +484,44 @@ client.on('interactionCreate', async interaction => {
 
     await targetChannel.send({ embeds: [supportEmbed], components: [row] });
     await interaction.reply({ content: `✅ Support ticket panel successfully posted to <#${targetChannel.id}>!`, ephemeral: true });
+  }
+
+  // Staff Status Command
+  if (interaction.isChatInputCommand() && interaction.commandName === 'staff-status') {
+    await interaction.deferReply();
+    try {
+      const availableStaff = await getAvailableStaff(interaction.guild);
+
+      if (availableStaff.size === 0) {
+        const embed = {
+          color: 0xED4245,
+          title: '🔴 Staff Availability Status',
+          description: 'No moderators or managers are currently active.\n\n*Our 24/7 Automated Bot System is active! You can still open a ticket using the ticket panel and leave your details.*',
+          footer: { text: 'Euro Logistics VTC • Staff Availability Check' },
+          timestamp: new Date().toISOString()
+        };
+        return await interaction.editReply({ embeds: [embed] });
+      }
+
+      const staffList = availableStaff.map(m => {
+        const statusEmoji = m.presence?.status === 'online' ? '🟢' : (m.presence?.status === 'idle' ? '🟡' : '🔴');
+        const roleName = m.roles.highest.name;
+        return `${statusEmoji} **${m.displayName}** (\`${roleName}\`)`;
+      }).join('\n');
+
+      const embed = {
+        color: 0x57F287,
+        title: '🟢 Active Staff & Management',
+        description: `The following team members are currently online and available to help:\n\n${staffList}`,
+        footer: { text: 'Euro Logistics VTC • Staff Availability Check' },
+        timestamp: new Date().toISOString()
+      };
+
+      await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Error fetching staff presence:', error);
+      await interaction.editReply({ content: '❌ Failed to fetch staff presence data.' });
+    }
   }
 
   if (interaction.isChatInputCommand() && interaction.commandName === 'leaderboard') {
@@ -592,6 +653,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
+  // Dual Role Verification Button Interaction
   if (interaction.isButton() && interaction.customId.startsWith('verify_dual_')) {
     const parts = interaction.customId.split('_');
     const verifiedRoleId = parts[2];
@@ -611,6 +673,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
+  // Support Ticket Creation with Automatic Staff Presence Detection
   if (interaction.isButton() && interaction.customId === 'create_support_ticket') {
     await interaction.deferReply({ ephemeral: true });
     const guild = interaction.guild;
@@ -632,11 +695,22 @@ client.on('interactionCreate', async interaction => {
         ]
       });
 
+      // Check live staff presence
+      const activeStaff = await getAvailableStaff(guild);
+      let staffNotice = "";
+
+      if (activeStaff.size > 0) {
+        const staffNames = activeStaff.map(m => m.displayName).join(', ');
+        staffNotice = `🟢 **Available Staff Online:** ${staffNames}\n*Our team has been notified and will assist you shortly.*`;
+      } else {
+        staffNotice = `🤖 **24/7 Bot Notice:** No management or moderators are currently online.\n*Your ticket is open! Please leave your details, and staff will review it as soon as they log on.*`;
+      }
+
       const ticketEmbed = {
         color: 0x53B7ED,
         title: `🎫 Support Ticket — ${user.username}`,
-        description: `Hello ${user}, welcome to your support ticket!\n\nPlease describe your issue or question below. When resolved, click **Close Ticket**.`,
-        footer: { text: 'Euro Logistics VTC • Support System' },
+        description: `Hello ${user}, welcome to your support ticket!\n\n${staffNotice}\n\n**Please describe your question or issue below.** When finished, click **Close Ticket**.`,
+        footer: { text: 'Euro Logistics VTC • 24/7 Automated Support System' },
         timestamp: new Date().toISOString()
       };
 
