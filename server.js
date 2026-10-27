@@ -38,13 +38,16 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.Reaction]
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember]
 });
 
 // Environment Variables from Render Dashboard
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID || '1564236424155373568';
+
+// CONFIGURATION: Replace with your actual welcome channel ID
+const WELCOME_CHANNEL_ID = 'YOUR_WELCOME_CHANNEL_ID_HERE'; 
 
 // Counting Game State
 let currentCount = 0;
@@ -96,6 +99,30 @@ client.once('ready', () => {
   registerCommands();
 });
 
+// Welcomer Event Trigger
+client.on('guildMemberAdd', async (member) => {
+    console.log(`[WELCOMER] New member joined: ${member.user.tag}`);
+    try {
+        const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+        if (!channel) {
+            console.error(`[WELCOMER] Could not find welcome channel with ID: ${WELCOME_CHANNEL_ID}`);
+            return;
+        }
+
+        const welcomeEmbed = new EmbedBuilder()
+            .setTitle('🚚 Welcome to Euro Logistics VTC!')
+            .setDescription(`Welcome ${member} to our official community server!\n\nHead over to our verification and rules channels to get started.`)
+            .setColor('#FF6600')
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .setTimestamp();
+
+        await channel.send({ content: `Welcome ${member}!`, embeds: [welcomeEmbed] });
+        console.log(`[WELCOMER] Successfully welcomed ${member.user.tag}`);
+    } catch (err) {
+        console.error('[ERROR] Welcomer error:', err);
+    }
+});
+
 // Handling Slash Commands & Button Interactions
 client.on('interactionCreate', async (interaction) => {
   try {
@@ -110,7 +137,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ ephemeral: true });
 
         const embed = new EmbedBuilder()
-          .setTitle('🎃 Euro Logistics VTC - Verification')
+          .setTitle('🚛 Euro Logistics VTC - Verification')
           .setDescription('Welcome to Euro Logistics! Click the button below to verify your account and access the server.')
           .setColor('#FF6600');
 
@@ -207,7 +234,6 @@ client.on('interactionCreate', async (interaction) => {
           const driverRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'driver' || r.name.toLowerCase() === 'vtc driver');
           
           const isVtcAccepted = driverRole && interaction.member.roles.cache.has(driverRole.id);
-
           let assignedRolesText = '';
 
           if (verifiedRole) {
@@ -220,7 +246,7 @@ client.on('interactionCreate', async (interaction) => {
             assignedRolesText += ` and **${driverRole.name}**`;
             await interaction.editReply({ content: `✅ Verification complete! Since you are accepted on our Truckline MP page, you have been assigned: ${assignedRolesText}.` });
           } else {
-            await interaction.editReply({ content: `✅ Verification complete! You have been assigned the **Verified** role.\n*(Note: If you have been accepted on our Truckline MP VTC page, make sure your Driver role is synced or open a ticket if it's missing).*` });
+            await interaction.editReply({ content: `✅ Verification complete! You have been assigned the **Verified** role.` });
           }
         } catch (roleError) {
           console.error('[ERROR] Verification Role Error:', roleError);
@@ -284,7 +310,6 @@ client.on('interactionCreate', async (interaction) => {
       // 3. CLOSE TICKET & TRANSCRIPT BUTTON
       else if (interaction.customId === 'btn_close_ticket') {
         await interaction.reply({ content: '🔒 Closing ticket and saving transcript...', ephemeral: true });
-
         const channel = interaction.channel;
         
         try {
@@ -321,7 +346,7 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // 1. PREFIX COMMAND: !say [message] (Supports uploaded file attachments)
+  // 1. PREFIX COMMAND: !say [message]
   if (message.content.startsWith('!say')) {
     const textContent = message.content.slice(4).trim();
     const attachments = Array.from(message.attachments.values());
@@ -332,20 +357,10 @@ client.on('messageCreate', async (message) => {
 
     try {
       const payload = {};
+      if (textContent) payload.content = textContent;
+      if (attachments.length > 0) payload.files = attachments.map(att => att.url);
 
-      if (textContent) {
-        payload.content = textContent;
-      }
-
-      // Pass attached files directly through the bot
-      if (attachments.length > 0) {
-        payload.files = attachments.map(att => att.url);
-      }
-
-      // Delete user's trigger message
       await message.delete().catch(() => {});
-
-      // Send the payload through the bot
       await message.channel.send(payload);
     } catch (err) {
       console.error('[ERROR] Prefix !say error:', err);
@@ -356,7 +371,6 @@ client.on('messageCreate', async (message) => {
   // 2. COUNTING GAME
   if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
     const userNumber = parseInt(message.content.trim(), 10);
-
     if (isNaN(userNumber)) return;
 
     try {
