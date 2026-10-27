@@ -321,19 +321,45 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // 1. PREFIX COMMAND: !say [whatever you want]
+  // 1. PREFIX COMMAND: !say [message]
   if (message.content.startsWith('!say')) {
-    const sayContent = message.content.slice(4).trim();
+    const fullText = message.content.slice(4).trim();
+    const hasAttachments = message.attachments.size > 0;
 
-    if (!sayContent) {
-      return message.reply('⚠️ Please provide a message to say. Usage: `!say [message]`');
+    if (!fullText && !hasAttachments) {
+      return message.reply('⚠️ Please provide text or attach an image. Usage: `!say [message]`');
     }
 
     try {
-      // Delete the original message from the user
+      const payload = {};
+
+      // Handle attached image files (places image underneath or alongside attached message)
+      if (hasAttachments) {
+        payload.files = Array.from(message.attachments.values()).map(att => att.url);
+      }
+
+      // Check if user separated text and an image URL using "|" symbol (e.g. !say Check this out | https://image.png)
+      if (fullText.includes('|')) {
+        const parts = fullText.split('|');
+        const textPart = parts[0].trim();
+        const imageUrl = parts[1].trim();
+
+        if (textPart) payload.content = textPart;
+
+        const imageEmbed = new EmbedBuilder()
+          .setColor('#FF6600')
+          .setImage(imageUrl);
+
+        payload.embeds = [imageEmbed];
+      } else if (fullText) {
+        payload.content = fullText;
+      }
+
+      // Delete user's trigger message
       await message.delete().catch(() => {});
-      // Send the content as the bot
-      await message.channel.send({ content: sayContent });
+
+      // Send output as bot
+      await message.channel.send(payload);
     } catch (err) {
       console.error('[ERROR] Prefix !say error:', err);
     }
