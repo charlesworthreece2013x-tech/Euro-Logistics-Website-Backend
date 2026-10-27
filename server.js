@@ -39,10 +39,10 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
 
-// Environment Variables (Set these in Render Dashboard)
+// Environment Variables from Render Dashboard
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID; // Fast testing in your specific server
+const GUILD_ID = process.env.GUILD_ID || '1564236424155373568'; // Fallback to your server ID
 
 // Counting State
 let currentCount = 0;
@@ -69,14 +69,9 @@ const commands = [
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(TOKEN);
   try {
-    console.log('[BOT] Registering slash commands...');
-    if (GUILD_ID) {
-      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-      console.log('[BOT] Guild slash commands registered successfully.');
-    } else {
-      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-      console.log('[BOT] Global slash commands registered successfully.');
-    }
+    console.log('[BOT] Registering slash commands to guild...');
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
+    console.log('[BOT] Guild slash commands registered successfully!');
   } catch (error) {
     console.error('[BOT] Error registering slash commands:', error);
   }
@@ -86,7 +81,6 @@ async function registerCommands() {
 // 4. EVENT HANDLERS
 // ==========================================
 
-// Client Ready
 client.once('ready', () => {
   console.log(`[BOT] Logged in as ${client.user.tag}`);
   registerCommands();
@@ -119,7 +113,7 @@ client.on('interactionCreate', async (interaction) => {
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        await interaction.editReply({ content: 'Verification panel sent successfully!' });
+        await interaction.editReply({ content: '✅ Verification panel deployed successfully!' });
       }
 
       // /setup-support
@@ -140,7 +134,7 @@ client.on('interactionCreate', async (interaction) => {
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        await interaction.editReply({ content: 'Support panel sent successfully!' });
+        await interaction.editReply({ content: '✅ Support panel deployed successfully!' });
       }
 
       // /setup-counting
@@ -153,12 +147,12 @@ client.on('interactionCreate', async (interaction) => {
           .setColor('#FF6600');
 
         await interaction.channel.send({ embeds: [embed] });
-        await interaction.editReply({ content: 'Counting channel initialized successfully!' });
+        await interaction.editReply({ content: '✅ Counting panel deployed successfully!' });
       }
 
       // /other
       else if (commandName === 'other') {
-        await interaction.deferReply();
+        await interaction.deferReply({ ephemeral: true });
 
         const embed = new EmbedBuilder()
           .setTitle('🚛 Euro Logistics VTC')
@@ -182,7 +176,6 @@ client.on('interactionCreate', async (interaction) => {
       // Verification Button Action
       if (interaction.customId === 'btn_verify') {
         try {
-          // Look for 'Driver', 'Member', or 'Verified' role in your server
           const role = interaction.guild.roles.cache.find(
             r => r.name.toLowerCase() === 'driver' || 
                  r.name.toLowerCase() === 'member' || 
@@ -193,13 +186,11 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.member.roles.add(role);
             await interaction.editReply({ content: `✅ Verification complete! Assigned role: **${role.name}**.` });
           } else {
-            await interaction.editReply({ content: '✅ You are verified! (Note: To automatically assign a role, create a role named "Driver" or "Verified" in your Server Settings).' });
+            await interaction.editReply({ content: '✅ You are verified! (Tip: Create a role named "Driver" in Server Settings to auto-assign it here).' });
           }
         } catch (roleError) {
-          console.error('[ERROR] Verification Role Error:', roleError);
-          await interaction.editReply({ 
-            content: '⚠️ Verified! However, I could not assign the role. Please check that the bot\'s role is placed ABOVE the Driver/Verified role in **Server Settings ➔ Roles**.' 
-          });
+          console.error('[ERROR] Role assignment failed:', roleError);
+          await interaction.editReply({ content: '⚠️ Verified, but could not assign the role. Make sure the bot role is placed **above** the target role in Server Settings ➔ Roles.' });
         }
       }
 
@@ -209,11 +200,11 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   } catch (error) {
-    console.error('[ERROR] Interaction execution error:', error);
+    console.error('[ERROR] Interaction handling error:', error);
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: 'An unexpected error occurred while processing your request.' }).catch(() => {});
+      await interaction.editReply({ content: '⚠️ An error occurred while processing this command.' }).catch(() => {});
     } else {
-      await interaction.reply({ content: 'An unexpected error occurred.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: '⚠️ An error occurred.', ephemeral: true }).catch(() => {});
     }
   }
 });
@@ -224,8 +215,8 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Trigger on any channel named 'counting' or containing 'counting'
-  if (message.channel.name.toLowerCase().includes('counting')) {
+  // Triggers if the channel name includes "counting"
+  if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
     const userNumber = parseInt(message.content.trim(), 10);
 
     if (isNaN(userNumber)) return;
@@ -234,7 +225,7 @@ client.on('messageCreate', async (message) => {
       if (userNumber === currentCount + 1) {
         if (message.author.id === lastCounterId) {
           await message.react('❌').catch(() => {});
-          await message.reply('You cannot count twice in a row! Count reset to **0**.');
+          await message.reply('❌ You cannot count twice in a row! Count reset to **0**.');
           currentCount = 0;
           lastCounterId = null;
           return;
@@ -242,15 +233,15 @@ client.on('messageCreate', async (message) => {
 
         currentCount++;
         lastCounterId = message.author.id;
-        await message.react('✅').catch(err => console.error('[ERROR] Failed to react:', err));
+        await message.react('✅').catch(() => {});
       } else {
         await message.react('❌').catch(() => {});
-        await message.reply(`Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
+        await message.reply(`❌ Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
         currentCount = 0;
         lastCounterId = null;
       }
     } catch (err) {
-      console.error('[ERROR] Counting logic error:', err);
+      console.error('[ERROR] Counting error:', err);
     }
   }
 });
