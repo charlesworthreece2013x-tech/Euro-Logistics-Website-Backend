@@ -302,3 +302,56 @@ client.on('interactionCreate', async (interaction) => {
         } catch (err) {
           console.error('[ERROR] Closing ticket error:', err);
           await channel.delete().catch(() => {});
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[ERROR] Interaction handling error:', error);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: '⚠️ An error occurred while processing this request.' }).catch(() => {});
+    } else {
+      await interaction.reply({ content: '⚠️ An error occurred.', ephemeral: true }).catch(() => {});
+    }
+  }
+});
+
+// --------------------------------------
+// C. MESSAGE LISTENER (COUNTING GAME)
+// --------------------------------------
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
+    const userNumber = parseInt(message.content.trim(), 10);
+
+    if (isNaN(userNumber)) return;
+
+    try {
+      if (userNumber === currentCount + 1) {
+        if (message.author.id === lastCounterId) {
+          await message.react('❌').catch(() => {});
+          await message.reply('❌ You cannot count twice in a row! Count reset to **0**.');
+          currentCount = 0;
+          lastCounterId = null;
+          return;
+        }
+
+        currentCount++;
+        lastCounterId = message.author.id;
+        await message.react('✅').catch(() => {});
+      } else {
+        await message.react('❌').catch(() => {});
+        await message.reply(`❌ Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
+        currentCount = 0;
+        lastCounterId = null;
+      }
+    } catch (err) {
+      console.error('[ERROR] Counting error:', err);
+    }
+  }
+});
+
+// ==========================================
+// 5. START BOT
+// ==========================================
+client.login(TOKEN);
