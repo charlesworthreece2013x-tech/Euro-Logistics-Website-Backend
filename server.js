@@ -40,6 +40,11 @@ app.get('/api/fleet-stats', async (req, res) => {
 
             const activities = member.presence?.activities || [];
 
+            // DEBUG LOG: Check your Render console logs to see what activities your account has
+            if (activities.length > 0) {
+                console.log(`[DEBUG] User ${member.user.tag} active presence apps:`, activities.map(a => a.name));
+            }
+
             // Check across all possible presence name variations
             const trucklinePresence = activities.find(a => 
                 a.name && (
