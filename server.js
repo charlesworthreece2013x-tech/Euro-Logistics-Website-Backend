@@ -15,13 +15,16 @@ const {
 const express = require('express');
 const path = require('path');
 
+// Global set to keep track of manually checked-in drivers (/duty on)
+global.activeDriverIds = global.activeDriverIds || new Set();
+
 // ==========================================
 // 1. EXPRESS SERVER & WEBSITE (FOR RENDER)
 // ==========================================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Dynamic Telemetry API reading exact TrucklineMP Discord status
+// Dynamic Telemetry API
 app.get('/api/fleet-stats', async (req, res) => {
     try {
         const guild = client.guilds.cache.get(GUILD_ID);
@@ -30,23 +33,18 @@ app.get('/api/fleet-stats', async (req, res) => {
             return res.json({ status: "ONLINE", activeDrivers: 0, totalMiles: 0, drivers: [] });
         }
 
-        // FORCE Discord.js to attach presences when fetching server members
-        await guild.members.fetch({ withPresences: true });
+        // Fetch members with presence details cached
+        await guild.members.fetch({ withPresences: true }).catch(() => {});
 
-        const driversList = [];
+        const driversMap = new Map();
 
+        // 1. Check for active Discord Rich Presence (Truckline / ETS2 / ATS)
         guild.members.cache.forEach(member => {
             if (member.user.bot) return;
 
             const activities = member.presence?.activities || [];
 
-            // DEBUG LOG: Check your Render console logs to see what activities your account has
-            if (activities.length > 0) {
-                console.log(`[DEBUG] User ${member.user.tag} active presence apps:`, activities.map(a => a.name));
-            }
-
-            // Check across all possible presence name variations
-            const trucklinePresence = activities.find(a => 
+            const gamePresence = activities.find(a => 
                 a.name && (
                     a.name.toLowerCase().includes('truckline') ||
                     a.name.toLowerCase().includes('euro truck') ||
@@ -54,16 +52,12 @@ app.get('/api/fleet-stats', async (req, res) => {
                 )
             );
 
-            if (trucklinePresence) {
-                // Read exact status details (e.g. "In the main menu", "Not connected")
-                const details = trucklinePresence.details || '';
-                const state = trucklinePresence.state || '';
-
-                // Combine details & state into a clean status string
+            if (gamePresence) {
+                const details = gamePresence.details || '';
+                const state = gamePresence.state || '';
                 let fullStatus = [details, state].filter(Boolean).join(' - ');
-                if (!fullStatus) fullStatus = `Playing ${trucklinePresence.name}`;
+                if (!fullStatus) fullStatus = `Playing ${gamePresence.name}`;
 
-                // Determine Rank from Discord Roles
                 let rankText = 'Fleet Driver';
                 if (member.roles.cache.some(r => r.name.toLowerCase().includes('owner') || r.name.toLowerCase().includes('founder'))) {
                     rankText = 'VTC Owner';
@@ -71,7 +65,7 @@ app.get('/api/fleet-stats', async (req, res) => {
                     rankText = 'Senior Driver';
                 }
 
-                driversList.push({
+                driversMap.set(member.id, {
                     name: member.displayName,
                     rank: rankText,
                     miles: 1500,
@@ -79,6 +73,28 @@ app.get('/api/fleet-stats', async (req, res) => {
                 });
             }
         });
+
+        // 2. Check for drivers who manually checked in via /duty on
+        for (const userId of global.activeDriverIds) {
+            if (!driversMap.has(userId)) {
+                const member = guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
+                if (member) {
+                    let rankText = 'Fleet Driver';
+                    if (member.roles.cache.some(r => r.name.toLowerCase().includes('owner') || r.name.toLowerCase().includes('founder'))) {
+                        rankText = 'VTC Owner';
+                    }
+
+                    driversMap.set(member.id, {
+                        name: member.displayName,
+                        rank: rankText,
+                        miles: 1500,
+                        status: 'On Duty (Truckline MP)'
+                    });
+                }
+            }
+        }
+
+        const driversList = Array.from(driversMap.values());
 
         res.json({
             status: "ONLINE",
@@ -88,12 +104,12 @@ app.get('/api/fleet-stats', async (req, res) => {
         });
 
     } catch (err) {
-        console.error('[API Error] Failed to fetch TrucklineMP presence stats:', err);
+        console.error('[API Error] Failed to fetch telemetry stats:', err);
         res.json({ status: "ONLINE", activeDrivers: 0, totalMiles: 0, drivers: [] });
     }
 });
 
-// Serve static website files (index.html, style.css, script.js, etc.) from the root folder
+// Serve static website files from root folder
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
@@ -101,7 +117,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[HTTP] Express website and dynamic telemetry API listening on port ${PORT}`);
+  console.log(`[HTTP] Express website listening on port ${PORT}`);
 });
 
 // ==========================================
@@ -113,20 +129,17 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildPresences // Required for rich presence detection!
+    GatewayIntentBits.GuildPresences
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember]
 });
 
-// Environment Variables from Render Dashboard
+// Environment Variables
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID || '1564236424155373568';
-
-// CONFIGURATION: Replace with your actual welcome channel ID
 const WELCOME_CHANNEL_ID = 'YOUR_WELCOME_CHANNEL_ID_HERE'; 
 
-// Counting Game State
 let currentCount = 0;
 let lastCounterId = null;
 
@@ -134,6 +147,18 @@ let lastCounterId = null;
 // 3. REGISTER SLASH COMMANDS
 // ==========================================
 const commands = [
+  new SlashCommandBuilder()
+    .setName('duty')
+    .setDescription('Toggle your on-duty driver status for the VTC website')
+    .addStringOption(option =>
+      option.setName('status')
+        .setDescription('Go on-duty or off-duty')
+        .setRequired(true)
+        .addChoices(
+          { name: 'On Duty (Driving)', value: 'on' },
+          { name: 'Off Duty', value: 'off' }
+        )
+    ),
   new SlashCommandBuilder()
     .setName('setup-verification')
     .setDescription('Deploy the verification prompt panel (Admin)'),
@@ -159,9 +184,9 @@ const commands = [
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(TOKEN);
   try {
-    console.log('[BOT] Registering slash commands to guild...');
+    console.log('[BOT] Registering slash commands...');
     await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-    console.log('[BOT] Guild slash commands registered successfully!');
+    console.log('[BOT] Slash commands registered successfully!');
   } catch (error) {
     console.error('[BOT] Error registering slash commands:', error);
   }
@@ -176,46 +201,51 @@ client.once('ready', () => {
   registerCommands();
 });
 
-// Welcomer Event Trigger
+// Welcomer Event
 client.on('guildMemberAdd', async (member) => {
-    console.log(`[WELCOMER] New member joined: ${member.user.tag}`);
     try {
         const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
-        if (!channel) {
-            console.error(`[WELCOMER] Could not find welcome channel with ID: ${WELCOME_CHANNEL_ID}`);
-            return;
-        }
+        if (!channel) return;
 
         const welcomeEmbed = new EmbedBuilder()
             .setTitle('🚚 Welcome to Euro Logistics VTC!')
-            .setDescription(`Welcome ${member} to our official community server!\n\nHead over to our verification and rules channels to get started.`)
+            .setDescription(`Welcome ${member} to our official community server!`)
             .setColor('#FF6600')
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
             .setTimestamp();
 
         await channel.send({ content: `Welcome ${member}!`, embeds: [welcomeEmbed] });
-        console.log(`[WELCOMER] Successfully welcomed ${member.user.tag}`);
     } catch (err) {
         console.error('[ERROR] Welcomer error:', err);
     }
 });
 
-// Handling Slash Commands & Button Interactions
+// Slash Command & Interaction Handler
 client.on('interactionCreate', async (interaction) => {
   try {
-    // --------------------------------------
-    // A. SLASH COMMANDS
-    // --------------------------------------
     if (interaction.isChatInputCommand()) {
       const { commandName } = interaction;
 
-      // /setup-verification
-      if (commandName === 'setup-verification') {
+      // /duty Command Handler
+      if (commandName === 'duty') {
         await interaction.deferReply({ ephemeral: true });
+        const choice = interaction.options.getString('status');
 
+        if (choice === 'on') {
+          global.activeDriverIds.add(interaction.user.id);
+          await interaction.editReply({ content: '✅ You are now marked as **On Duty** on the website telemetry dashboard!' });
+        } else {
+          global.activeDriverIds.delete(interaction.user.id);
+          await interaction.editReply({ content: '❌ You are now marked as **Off Duty**.' });
+        }
+      }
+
+      // /setup-verification
+      else if (commandName === 'setup-verification') {
+        await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
           .setTitle('🚛 Euro Logistics VTC - Verification')
-          .setDescription('Welcome to Euro Logistics! Click the button below to verify your account and access the server.')
+          .setDescription('Welcome! Click below to verify your account.')
           .setColor('#FF6600');
 
         const row = new ActionRowBuilder().addComponents(
@@ -233,10 +263,9 @@ client.on('interactionCreate', async (interaction) => {
       // /setup-support
       else if (commandName === 'setup-support') {
         await interaction.deferReply({ ephemeral: true });
-
         const embed = new EmbedBuilder()
           .setTitle('🛠️ Euro Logistics VTC - Support & Tickets')
-          .setDescription('Need help, have questions, or inquiring about your Truckline MP application? Click below to open a private ticket.')
+          .setDescription('Click below to open a private ticket.')
           .setColor('#FF6600');
 
         const row = new ActionRowBuilder().addComponents(
@@ -254,223 +283,109 @@ client.on('interactionCreate', async (interaction) => {
       // /setup-counting
       else if (commandName === 'setup-counting') {
         await interaction.deferReply({ ephemeral: true });
-
         const embed = new EmbedBuilder()
           .setTitle('🔢 Euro Logistics VTC - Counting Game')
-          .setDescription('The counting game is ready! Start counting from **1**. Remember: no counting twice in a row!')
+          .setDescription('Start counting from **1**!')
           .setColor('#FF6600');
 
         await interaction.channel.send({ embeds: [embed] });
-        await interaction.editReply({ content: '✅ Counting panel deployed successfully!' });
+        await interaction.editReply({ content: '✅ Counting panel deployed!' });
       }
 
       // /clear
       else if (commandName === 'clear') {
         await interaction.deferReply({ ephemeral: true });
         const amount = interaction.options.getInteger('amount');
-
         if (amount < 1 || amount > 100) {
           return await interaction.editReply({ content: '⚠️ Please specify a number between 1 and 100.' });
         }
-
-        try {
-          await interaction.channel.bulkDelete(amount, true);
-          await interaction.editReply({ content: `✅ Successfully cleared **${amount}** messages!` });
-        } catch (err) {
-          console.error('[ERROR] Clear command error:', err);
-          await interaction.editReply({ content: '⚠️ Failed to clear messages. Note: Discord cannot bulk-delete messages older than 14 days.' });
-        }
+        await interaction.channel.bulkDelete(amount, true);
+        await interaction.editReply({ content: `✅ Cleared **${amount}** messages!` });
       }
 
       // /other
       else if (commandName === 'other') {
         await interaction.deferReply({ ephemeral: true });
-
         const embed = new EmbedBuilder()
           .setTitle('🚛 Euro Logistics VTC')
           .setDescription('Official Euro Logistics VTC Community Services.')
-          .addFields(
-            { name: 'Platform', value: 'Truckline MP', inline: true },
-            { name: 'Status', value: 'Actively Recruiting Drivers', inline: true }
-          )
           .setColor('#FF6600');
 
         await interaction.editReply({ embeds: [embed] });
       }
     }
 
-    // --------------------------------------
-    // B. BUTTON CLICK HANDLERS
-    // --------------------------------------
+    // Button interactions
     else if (interaction.isButton()) {
-      // 1. VERIFICATION BUTTON
       if (interaction.customId === 'btn_verify') {
         await interaction.deferReply({ ephemeral: true });
-        try {
-          const verifiedRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
-          const driverRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'driver' || r.name.toLowerCase() === 'vtc driver');
-          
-          const isVtcAccepted = driverRole && interaction.member.roles.cache.has(driverRole.id);
-          let assignedRolesText = '';
-
-          if (verifiedRole) {
-            await interaction.member.roles.add(verifiedRole);
-            assignedRolesText += `**${verifiedRole.name}**`;
-          }
-
-          if (isVtcAccepted && driverRole) {
-            await interaction.member.roles.add(driverRole);
-            assignedRolesText += ` and **${driverRole.name}**`;
-            await interaction.editReply({ content: `✅ Verification complete! Since you are accepted on our Truckline MP page, you have been assigned: ${assignedRolesText}.` });
-          } else {
-            await interaction.editReply({ content: `✅ Verification complete! You have been assigned the **Verified** role.` });
-          }
-        } catch (roleError) {
-          console.error('[ERROR] Verification Role Error:', roleError);
-          await interaction.editReply({ content: '⚠️ Verified! However, I could not assign the roles. Check bot role hierarchy in Server Settings.' });
-        }
+        const verifiedRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
+        if (verifiedRole) await interaction.member.roles.add(verifiedRole);
+        await interaction.editReply({ content: '✅ Verification complete!' });
       }
 
-      // 2. SUPPORT TICKET CREATION BUTTON
       else if (interaction.customId === 'btn_support_ticket') {
         await interaction.deferReply({ ephemeral: true });
-
         const guild = interaction.guild;
         const member = interaction.member;
 
-        const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${member.user.username.toLowerCase()}`);
-        if (existingChannel) {
-          return await interaction.editReply({ content: `⚠️ You already have an open ticket here: ${existingChannel}` });
-        }
+        const ticketChannel = await guild.channels.create({
+          name: `ticket-${member.user.username}`,
+          type: ChannelType.GuildText,
+          permissionOverwrites: [
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+            { id: client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+          ]
+        });
 
-        try {
-          const ticketChannel = await guild.channels.create({
-            name: `ticket-${member.user.username}`,
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-              {
-                id: guild.id,
-                deny: [PermissionFlagsBits.ViewChannel],
-              },
-              {
-                id: member.id,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-              },
-              {
-                id: client.user.id,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
-              },
-            ],
-          });
+        const ticketEmbed = new EmbedBuilder()
+          .setTitle(`Support Ticket - ${member.user.tag}`)
+          .setDescription('Staff will be with you shortly.')
+          .setColor('#FF6600');
 
-          const ticketEmbed = new EmbedBuilder()
-            .setTitle(`Support Ticket - ${member.user.tag}`)
-            .setDescription('Welcome! Support staff will be with you shortly.\nIf you are inquiring about your **Truckline MP VTC application**, please state your in-game name and details below.')
-            .setColor('#FF6600');
+        const closeRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('btn_close_ticket').setLabel('Close Ticket').setStyle(ButtonStyle.Danger)
+        );
 
-          const closeRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId('btn_close_ticket')
-              .setLabel('Close & Transcript')
-              .setStyle(ButtonStyle.Danger)
-              .setEmoji('🔒')
-          );
-
-          await ticketChannel.send({ content: `${member}`, embeds: [ticketEmbed], components: [closeRow] });
-          await interaction.editReply({ content: `✅ Ticket created successfully! Head over to your private channel: ${ticketChannel}` });
-        } catch (err) {
-          console.error('[ERROR] Ticket creation failed:', err);
-          await interaction.editReply({ content: '⚠️ Failed to create support ticket channel. Please check bot permissions.' });
-        }
+        await ticketChannel.send({ content: `${member}`, embeds: [ticketEmbed], components: [closeRow] });
+        await interaction.editReply({ content: `✅ Ticket created: ${ticketChannel}` });
       }
 
-      // 3. CLOSE TICKET & TRANSCRIPT BUTTON
       else if (interaction.customId === 'btn_close_ticket') {
-        await interaction.reply({ content: '🔒 Closing ticket and saving transcript...', ephemeral: true });
-        const channel = interaction.channel;
-        
-        try {
-          const messages = await channel.messages.fetch({ limit: 100 });
-          const transcript = messages
-            .reverse()
-            .map(m => `[${m.author.tag}]: ${m.content}`)
-            .join('\n');
-
-          console.log(`[TRANSCRIPT for ${channel.name}]:\n${transcript}`);
-
-          setTimeout(async () => {
-            await channel.delete().catch(() => {});
-          }, 3000);
-        } catch (err) {
-          console.error('[ERROR] Closing ticket error:', err);
-          await channel.delete().catch(() => {});
-        }
+        await interaction.reply({ content: '🔒 Closing ticket...', ephemeral: true });
+        setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
       }
     }
   } catch (error) {
-    console.error('[ERROR] Interaction handling error:', error);
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: '⚠️ An error occurred while processing this request.' }).catch(() => {});
-    } else {
-      await interaction.reply({ content: '⚠️ An error occurred.', ephemeral: true }).catch(() => {});
-    }
+    console.error('[ERROR] Interaction error:', error);
   }
 });
 
-// --------------------------------------
-// C. MESSAGE LISTENER (SAY COMMAND & COUNTING GAME)
-// --------------------------------------
+// Counting Game & Messages
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // 1. PREFIX COMMAND: !say [message]
-  if (message.content.startsWith('!say')) {
-    const textContent = message.content.slice(4).trim();
-    const attachments = Array.from(message.attachments.values());
-
-    if (!textContent && attachments.length === 0) {
-      return message.reply('⚠️ Please provide a message or attach a file. Usage: `!say [message]`');
-    }
-
-    try {
-      const payload = {};
-      if (textContent) payload.content = textContent;
-      if (attachments.length > 0) payload.files = attachments.map(att => att.url);
-
-      await message.delete().catch(() => {});
-      await message.channel.send(payload);
-    } catch (err) {
-      console.error('[ERROR] Prefix !say error:', err);
-    }
-    return;
-  }
-
-  // 2. COUNTING GAME
   if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
     const userNumber = parseInt(message.content.trim(), 10);
     if (isNaN(userNumber)) return;
 
-    try {
-      if (userNumber === currentCount + 1) {
-        if (message.author.id === lastCounterId) {
-          await message.react('❌').catch(() => {});
-          await message.reply('❌ You cannot count twice in a row! Count reset to **0**.');
-          currentCount = 0;
-          lastCounterId = null;
-          return;
-        }
-
-        currentCount++;
-        lastCounterId = message.author.id;
-        await message.react('✅').catch(() => {});
-      } else {
+    if (userNumber === currentCount + 1) {
+      if (message.author.id === lastCounterId) {
         await message.react('❌').catch(() => {});
-        await message.reply(`❌ Wrong number! The next number was **${currentCount + 1}**. Count reset to **0**.`);
+        await message.reply('❌ You cannot count twice in a row! Count reset to **0**.');
         currentCount = 0;
         lastCounterId = null;
+        return;
       }
-    } catch (err) {
-      console.error('[ERROR] Counting error:', err);
+      currentCount++;
+      lastCounterId = message.author.id;
+      await message.react('✅').catch(() => {});
+    } else {
+      await message.react('❌').catch(() => {});
+      await message.reply(`❌ Wrong number! Count reset to **0**.`);
+      currentCount = 0;
+      lastCounterId = null;
     }
   }
 });
