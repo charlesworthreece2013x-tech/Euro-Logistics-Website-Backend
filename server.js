@@ -35,7 +35,7 @@ app.get('/api/fleet-stats', async (req, res) => {
 
         const driversMap = new Map();
 
-        // 1. Check for manual /duty check-ins (Reliable source)
+        // Check for manual /duty check-ins
         for (const userId of global.activeDriverIds) {
             const member = guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
             if (member) {
@@ -49,7 +49,7 @@ app.get('/api/fleet-stats', async (req, res) => {
                 driversMap.set(member.id, {
                     name: member.displayName,
                     rank: rankText,
-                    miles: 0, // Starts at 0 until jobs are logged
+                    miles: 0, 
                     status: 'On Duty (Truckline MP)'
                 });
             }
@@ -61,7 +61,7 @@ app.get('/api/fleet-stats', async (req, res) => {
         res.json({
             status: "ONLINE",
             activeDrivers: totalActiveDrivers,
-            totalMiles: 0, // Accurate base mileage
+            totalMiles: 0, 
             drivers: driversList
         });
 
@@ -324,10 +324,35 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// Counting Game & Messages
+// --------------------------------------
+// MESSAGE LISTENER (!SAY & COUNTING GAME)
+// --------------------------------------
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
+  // 1. PREFIX COMMAND: !say [message]
+  if (message.content.startsWith('!say')) {
+    const textContent = message.content.slice(4).trim();
+    const attachments = Array.from(message.attachments.values());
+
+    if (!textContent && attachments.length === 0) {
+      return message.reply('⚠️ Please provide a message or attach a file. Usage: `!say [message]`');
+    }
+
+    try {
+      const payload = {};
+      if (textContent) payload.content = textContent;
+      if (attachments.length > 0) payload.files = attachments.map(att => att.url);
+
+      await message.delete().catch(() => {});
+      await message.channel.send(payload);
+    } catch (err) {
+      console.error('[ERROR] Prefix !say error:', err);
+    }
+    return;
+  }
+
+  // 2. COUNTING GAME
   if (message.channel.name && message.channel.name.toLowerCase().includes('counting')) {
     const userNumber = parseInt(message.content.trim(), 10);
     if (isNaN(userNumber)) return;
