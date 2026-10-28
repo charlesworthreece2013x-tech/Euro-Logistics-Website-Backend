@@ -24,7 +24,7 @@ global.activeDriverIds = global.activeDriverIds || new Set();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Dynamic Telemetry API
+// Clean Telemetry API: Accurate 1-to-1 driver tracking & realistic miles
 app.get('/api/fleet-stats', async (req, res) => {
     try {
         const guild = client.guilds.cache.get(GUILD_ID);
@@ -33,31 +33,12 @@ app.get('/api/fleet-stats', async (req, res) => {
             return res.json({ status: "ONLINE", activeDrivers: 0, totalMiles: 0, drivers: [] });
         }
 
-        // Fetch members with presence details cached
-        await guild.members.fetch({ withPresences: true }).catch(() => {});
-
         const driversMap = new Map();
 
-        // 1. Check for active Discord Rich Presence (Truckline / ETS2 / ATS)
-        guild.members.cache.forEach(member => {
-            if (member.user.bot) return;
-
-            const activities = member.presence?.activities || [];
-
-            const gamePresence = activities.find(a => 
-                a.name && (
-                    a.name.toLowerCase().includes('truckline') ||
-                    a.name.toLowerCase().includes('euro truck') ||
-                    a.name.toLowerCase().includes('american truck')
-                )
-            );
-
-            if (gamePresence) {
-                const details = gamePresence.details || '';
-                const state = gamePresence.state || '';
-                let fullStatus = [details, state].filter(Boolean).join(' - ');
-                if (!fullStatus) fullStatus = `Playing ${gamePresence.name}`;
-
+        // 1. Check for manual /duty check-ins (Reliable source)
+        for (const userId of global.activeDriverIds) {
+            const member = guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
+            if (member) {
                 let rankText = 'Fleet Driver';
                 if (member.roles.cache.some(r => r.name.toLowerCase().includes('owner') || r.name.toLowerCase().includes('founder'))) {
                     rankText = 'VTC Owner';
@@ -68,38 +49,19 @@ app.get('/api/fleet-stats', async (req, res) => {
                 driversMap.set(member.id, {
                     name: member.displayName,
                     rank: rankText,
-                    miles: 1500,
-                    status: fullStatus
+                    miles: 0, // Starts at 0 until jobs are logged
+                    status: 'On Duty (Truckline MP)'
                 });
-            }
-        });
-
-        // 2. Check for drivers who manually checked in via /duty on
-        for (const userId of global.activeDriverIds) {
-            if (!driversMap.has(userId)) {
-                const member = guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
-                if (member) {
-                    let rankText = 'Fleet Driver';
-                    if (member.roles.cache.some(r => r.name.toLowerCase().includes('owner') || r.name.toLowerCase().includes('founder'))) {
-                        rankText = 'VTC Owner';
-                    }
-
-                    driversMap.set(member.id, {
-                        name: member.displayName,
-                        rank: rankText,
-                        miles: 1500,
-                        status: 'On Duty (Truckline MP)'
-                    });
-                }
             }
         }
 
         const driversList = Array.from(driversMap.values());
+        const totalActiveDrivers = driversList.length;
 
         res.json({
             status: "ONLINE",
-            activeDrivers: driversList.length,
-            totalMiles: driversList.length * 1500,
+            activeDrivers: totalActiveDrivers,
+            totalMiles: 0, // Accurate base mileage
             drivers: driversList
         });
 
