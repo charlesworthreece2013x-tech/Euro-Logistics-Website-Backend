@@ -30,8 +30,8 @@ app.get('/api/fleet-stats', async (req, res) => {
             return res.json({ status: "ONLINE", activeDrivers: 0, totalMiles: 0, drivers: [] });
         }
 
-        // Fetch all members with presence details cached
-        await guild.members.fetch();
+        // FORCE Discord.js to attach presences when fetching server members
+        await guild.members.fetch({ withPresences: true });
 
         const driversList = [];
 
@@ -40,9 +40,13 @@ app.get('/api/fleet-stats', async (req, res) => {
 
             const activities = member.presence?.activities || [];
 
-            // Find activity matching TrucklineMP
+            // Check across all possible presence name variations
             const trucklinePresence = activities.find(a => 
-                a.name && a.name.toLowerCase().includes('trucklinemp')
+                a.name && (
+                    a.name.toLowerCase().includes('truckline') ||
+                    a.name.toLowerCase().includes('euro truck') ||
+                    a.name.toLowerCase().includes('american truck')
+                )
             );
 
             if (trucklinePresence) {
@@ -52,7 +56,7 @@ app.get('/api/fleet-stats', async (req, res) => {
 
                 // Combine details & state into a clean status string
                 let fullStatus = [details, state].filter(Boolean).join(' - ');
-                if (!fullStatus) fullStatus = 'Driving TrucklineMP';
+                if (!fullStatus) fullStatus = `Playing ${trucklinePresence.name}`;
 
                 // Determine Rank from Discord Roles
                 let rankText = 'Fleet Driver';
