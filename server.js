@@ -21,18 +21,67 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// API Endpoint for Fleet Telemetry Stats (Matches your script.js fetch request)
-app.get('/api/fleet-stats', (req, res) => {
-    res.json({
-        status: "ONLINE",
-        activeDrivers: 3,
-        totalMiles: 31750,
-        drivers: [
-            { name: "Euro Logistics", rank: "VTC Owner", miles: 18450, status: "On Duty" },
-            { name: "Alpha_Hauler", rank: "Senior Driver", miles: 9200, status: "Driving ETS2" },
-            { name: "Nordic_Trucker", rank: "Fleet Driver", miles: 4100, status: "In Convoy" }
-        ]
-    });
+// Dynamic Telemetry API reading exact TrucklineMP Discord status
+app.get('/api/fleet-stats', async (req, res) => {
+    try {
+        const guild = client.guilds.cache.get(GUILD_ID);
+
+        if (!guild) {
+            return res.json({ status: "ONLINE", activeDrivers: 0, totalMiles: 0, drivers: [] });
+        }
+
+        // Fetch all members with presence details cached
+        await guild.members.fetch();
+
+        const driversList = [];
+
+        guild.members.cache.forEach(member => {
+            if (member.user.bot) return;
+
+            const activities = member.presence?.activities || [];
+
+            // Find activity matching TrucklineMP
+            const trucklinePresence = activities.find(a => 
+                a.name && a.name.toLowerCase().includes('trucklinemp')
+            );
+
+            if (trucklinePresence) {
+                // Read exact status details (e.g. "In the main menu", "Not connected")
+                const details = trucklinePresence.details || '';
+                const state = trucklinePresence.state || '';
+
+                // Combine details & state into a clean status string
+                let fullStatus = [details, state].filter(Boolean).join(' - ');
+                if (!fullStatus) fullStatus = 'Driving TrucklineMP';
+
+                // Determine Rank from Discord Roles
+                let rankText = 'Fleet Driver';
+                if (member.roles.cache.some(r => r.name.toLowerCase().includes('owner') || r.name.toLowerCase().includes('founder'))) {
+                    rankText = 'VTC Owner';
+                } else if (member.roles.cache.some(r => r.name.toLowerCase().includes('senior'))) {
+                    rankText = 'Senior Driver';
+                }
+
+                driversList.push({
+                    name: member.displayName,
+                    rank: rankText,
+                    miles: 1500,
+                    status: fullStatus
+                });
+            }
+        });
+
+        res.json({
+            status: "ONLINE",
+            activeDrivers: driversList.length,
+            totalMiles: driversList.length * 1500,
+            drivers: driversList
+        });
+
+    } catch (err) {
+        console.error('[API Error] Failed to fetch TrucklineMP presence stats:', err);
+        res.json({ status: "ONLINE", activeDrivers: 0, totalMiles: 0, drivers: [] });
+    }
 });
 
 // Serve static website files (index.html, style.css, script.js, etc.) from the root folder
@@ -43,7 +92,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[HTTP] Express website and telemetry API listening on port ${PORT}`);
+  console.log(`[HTTP] Express website and dynamic telemetry API listening on port ${PORT}`);
 });
 
 // ==========================================
@@ -54,7 +103,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences // Required for rich presence detection!
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember]
 });
